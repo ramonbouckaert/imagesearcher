@@ -24,7 +24,7 @@ object XmpReader {
                 }
             }
             tags
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }

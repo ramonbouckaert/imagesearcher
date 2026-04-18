@@ -12,7 +12,7 @@ private val logger = KotlinLogging.logger {}
 
 class PhotoWatcher(
     private val scanRoot: Path,
-    private val libraryRoot: Path,
+    libraryRoot: Path,
     private val index: LuceneIndex
 ) {
     private val imageExtensions = setOf("avif", "gif")
