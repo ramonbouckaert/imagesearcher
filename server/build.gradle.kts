@@ -15,6 +15,10 @@ dependencies {
     runtimeOnly(libs.logback)
 }
 
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
+    mergeServiceFiles()
+}
+
 val clientDist = project(":client").tasks.named("jsBrowserDistribution")
 
 tasks.named<ProcessResources>("processResources") {
@@ -27,4 +31,5 @@ tasks.named<ProcessResources>("processResources") {
 application {
     // (Note that Kotlin compiles `App.kt` to a class with FQN `io.bouckaert.imagesearcher.server.AppKt`.)
     mainClass = "io.bouckaert.imagesearcher.server.AppKt"
+    applicationDefaultJvmArgs = listOf("--add-modules", "jdk.incubator.vector")
 }
