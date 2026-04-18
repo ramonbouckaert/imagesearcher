@@ -1,10 +1,18 @@
 plugins {
-    id("buildsrc.convention.kotlin-jvm")
+    kotlin("multiplatform")
     alias(libs.plugins.kotlinPluginSerialization)
 }
 
-dependencies {
-    implementation(libs.bundles.kotlinxEcosystem)
-    implementation(libs.kim)
-    testImplementation(kotlin("test"))
+kotlin {
+    jvm()
+    js { browser() }
+
+    sourceSets {
+        commonMain.dependencies {
+            implementation(libs.kotlinxSerialization)
+        }
+        jvmMain.dependencies {
+            implementation(libs.kim)
+        }
+    }
 }

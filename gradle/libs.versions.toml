@@ -25,6 +25,7 @@ ktorServerContentNegotiation = { module = "io.ktor:ktor-server-content-negotiati
 ktorSerializationKotlinxJson = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 luceneCore = { module = "org.apache.lucene:lucene-core", version.ref = "lucene" }
 luceneQueryparser = { module = "org.apache.lucene:lucene-queryparser", version.ref = "lucene" }
+luceneQueries = { module = "org.apache.lucene:lucene-queries", version.ref = "lucene" }
 kfswatch = { module = "io.github.irgaly.kfswatch:kfswatch", version.ref = "kfswatch" }
 kim = { module = "com.ashampoo:kim", version.ref = "kim" }
 logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -34,7 +35,7 @@ kotlinLogging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "
 [bundles]
 kotlinxEcosystem = ["kotlinxDatetime", "kotlinxSerialization", "kotlinxCoroutines"]
 ktorServer = ["ktorServerCore", "ktorServerCio", "ktorServerContentNegotiation", "ktorSerializationKotlinxJson"]
-lucene = ["luceneCore", "luceneQueryparser"]
+lucene = ["luceneCore", "luceneQueryparser", "luceneQueries"]
 
 [plugins]
 kotlinPluginSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

@@ -36,7 +36,8 @@ class PhotoWatcher(
                         watcher.add(file.absolutePath)
                     } else if (file.extension.lowercase() in imageExtensions) {
                         logger.debug { "Indexing new file $relativePath" }
-                        index.index(relativePath, XmpReader.readSubjectTags(file))
+                        val xmp = XmpReader.read(file)
+                        index.index(relativePath, xmp.tags, xmp.description, file.lastModified())
                         index.commit()
                     }
                 }
@@ -48,7 +49,8 @@ class PhotoWatcher(
                 KfsEvent.Modify -> {
                     if (file.isFile && file.extension.lowercase() in imageExtensions) {
                         logger.debug { "Re-indexing modified file $relativePath" }
-                        index.index(relativePath, XmpReader.readSubjectTags(file))
+                        val xmp = XmpReader.read(file)
+                        index.index(relativePath, xmp.tags, xmp.description, file.lastModified())
                         index.commit()
                     }
                 }

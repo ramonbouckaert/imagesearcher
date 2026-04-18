@@ -26,6 +26,7 @@ kotlin {
 
     sourceSets {
         jsMain.dependencies {
+            implementation(project(":utils"))
             implementation(libs.kotlinxCoroutines)
             implementation(libs.kotlinxSerialization)
         }

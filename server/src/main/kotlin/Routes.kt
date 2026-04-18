@@ -7,10 +7,10 @@ import io.ktor.server.routing.*
 fun Routing.searchRoutes(index: LuceneIndex, basePath: String) {
     get("/search") {
         val query = call.request.queryParameters["q"] ?: ""
-        val results = index.search(query).map { result ->
-            result.copy(path = "$basePath/${result.path}")
-        }
-        call.respond(results)
+        val limit = call.request.queryParameters["limit"]?.toIntOrNull()?.coerceIn(1, 100) ?: 20
+        val offset = call.request.queryParameters["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val response = index.search(query, limit, offset)
+        call.respond(response.copy(results = response.results.map { it.copy(path = "$basePath/${it.path}") }))
     }
     staticResources("/", "static") {
         default("index.html")

@@ -27,7 +27,8 @@ class PhotoIndexer(
                     val relativePath = file.relativeTo(base).path
                     if (!index.isIndexed(relativePath)) {
                         logger.debug { "Indexing $relativePath" }
-                        index.index(relativePath, XmpReader.readSubjectTags(file))
+                        val xmp = XmpReader.read(file)
+                        index.index(relativePath, xmp.tags, xmp.description, file.lastModified())
                     } else {
                         logger.debug { "Skipping already-indexed $relativePath" }
                     }
