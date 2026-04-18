@@ -1,12 +1,13 @@
 package io.bouckaert.imagesearcher.utils
 
 import com.ashampoo.kim.Kim
+import com.ashampoo.kim.common.convertToPhotoMetadata
 import com.ashampoo.kim.input.JvmInputStreamByteReader
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 
-data class XmpData(val tags: List<String>, val description: String?)
+data class XmpData(val tags: List<String>, val description: String?, val lat: Double?, val lon: Double?)
 
 object XmpReader {
     private val xmlFactory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
@@ -17,14 +18,21 @@ object XmpReader {
     fun read(file: File): XmpData {
         return try {
             val metadata = Kim.readMetadata(JvmInputStreamByteReader(file.inputStream(), file.length()))
-                ?: return XmpData(emptyList(), null)
-            val xmpString = metadata.xmp ?: return XmpData(emptyList(), null)
+                ?: return XmpData(emptyList(), null, null, null)
+            val gps = metadata.convertToPhotoMetadata().gpsCoordinates
+                ?.takeIf { it.isValid() && !it.isNullIsland() }
+            val xmpString = metadata.xmp ?: return XmpData(emptyList(), null, gps?.latitude, gps?.longitude)
             val doc = xmlFactory.newDocumentBuilder().parse(
                 xmpString.trimStart('\uFEFF').trim().byteInputStream()
             )
-            XmpData(tags = readTags(doc), description = readDescription(doc))
+            XmpData(
+                tags = readTags(doc),
+                description = readDescription(doc),
+                lat = gps?.latitude,
+                lon = gps?.longitude
+            )
         } catch (_: Exception) {
-            XmpData(emptyList(), null)
+            XmpData(emptyList(), null, null, null)
         }
     }
 

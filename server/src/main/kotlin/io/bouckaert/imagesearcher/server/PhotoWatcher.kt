@@ -58,7 +58,7 @@ class PhotoWatcher(
                 } else if (file.extension.lowercase() in imageExtensions) {
                     logger.info { "Indexing new file $relativePath" }
                     val xmp = XmpReader.read(file)
-                    index.index(relativePath, xmp.tags, xmp.description, file.lastModified())
+                    index.index(relativePath, xmp.tags, xmp.description, file.lastModified(), xmp.lat, xmp.lon)
                     index.commit()
                 }
             }
@@ -73,7 +73,7 @@ class PhotoWatcher(
                 if (file.isFile && file.extension.lowercase() in imageExtensions) {
                     logger.info { "Re-indexing modified file $relativePath" }
                     val xmp = XmpReader.read(file)
-                    index.index(relativePath, xmp.tags, xmp.description, file.lastModified())
+                    index.index(relativePath, xmp.tags, xmp.description, file.lastModified(), xmp.lat, xmp.lon)
                     index.commit()
                 }
             }

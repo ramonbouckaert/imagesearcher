@@ -22,7 +22,7 @@ fun main() {
 
     val luceneDirectory = ByteBuffersDirectory()
 
-    LuceneIndex(luceneDirectory).use { index ->
+    LuceneIndex(luceneDirectory, basePath).use { index ->
         runBlocking {
             val watcher = PhotoWatcher(scanRoot, libraryRoot, index)
             val watchJob = launch { watcher.watch() }

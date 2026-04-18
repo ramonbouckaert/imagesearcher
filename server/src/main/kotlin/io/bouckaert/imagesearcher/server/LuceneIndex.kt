@@ -3,8 +3,16 @@ package io.bouckaert.imagesearcher.server
 import io.bouckaert.imagesearcher.utils.SearchResponse
 import io.bouckaert.imagesearcher.utils.SearchResult
 import org.apache.lucene.analysis.standard.StandardAnalyzer
+import io.github.sebasbaumh.mapbox.vectortile.adapt.jts.MvtEncoder
+import io.github.sebasbaumh.mapbox.vectortile.adapt.jts.UserDataKeyValueMapConverter
+import io.github.sebasbaumh.mapbox.vectortile.adapt.jts.model.JtsLayer
+import io.github.sebasbaumh.mapbox.vectortile.adapt.jts.model.JtsMvt
+import io.github.sebasbaumh.mapbox.vectortile.build.MvtLayerParams
 import org.apache.lucene.document.Document
+import org.locationtech.jts.geom.Coordinate
+import org.locationtech.jts.geom.GeometryFactory
 import org.apache.lucene.document.Field
+import org.apache.lucene.document.LatLonPoint
 import org.apache.lucene.document.NumericDocValuesField
 import org.apache.lucene.document.StoredField
 import org.apache.lucene.document.StringField
@@ -18,17 +26,24 @@ import org.apache.lucene.queryparser.classic.QueryParser
 import org.apache.lucene.search.DoubleValues
 import org.apache.lucene.search.DoubleValuesSource
 import org.apache.lucene.search.IndexSearcher
+import org.apache.lucene.search.BooleanClause
+import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.MatchAllDocsQuery
 import org.apache.lucene.search.Sort
 import org.apache.lucene.search.SortField
 import org.apache.lucene.store.Directory
 import org.apache.lucene.index.LeafReaderContext
 import java.io.Closeable
+import kotlin.math.atan
+import kotlin.math.cos
+import kotlin.math.ln
+import kotlin.math.sinh
+import kotlin.math.tan
 
 private const val RECENCY_WINDOW_MS = 10L * 365 * 24 * 60 * 60 * 1000 // 10 years
 private const val RECENCY_MAX_BOOST = 0.2 // newest images score up to 20% higher
 
-class LuceneIndex(private val directory: Directory) : Closeable {
+class LuceneIndex(private val directory: Directory, private val basePath: String) : Closeable {
     private val analyzer = StandardAnalyzer()
     private val writer = IndexWriter(directory, IndexWriterConfig(analyzer))
 
@@ -48,15 +63,56 @@ class LuceneIndex(private val directory: Directory) : Closeable {
         }
     }
 
-    fun index(filePath: String, tags: List<String>, description: String?, lastModifiedMs: Long) {
+    fun index(filePath: String, tags: List<String>, description: String?, lastModifiedMs: Long, lat: Double? = null, lon: Double? = null) {
         val doc = Document().apply {
             add(StringField("path", filePath, Field.Store.YES))
             add(StoredField("tagsStored", tags.joinToString(",")))
             add(TextField("tags", tags.joinToString(" "), Field.Store.NO))
             add(NumericDocValuesField("lastModified", lastModifiedMs))
             if (description != null) add(StoredField("description", description))
+            if (lat != null && lon != null) {
+                add(LatLonPoint("location", lat, lon))
+                add(StoredField("lat", lat))
+                add(StoredField("lon", lon))
+            }
         }
         writer.updateDocument(Term("path", filePath), doc)
+    }
+
+    fun searchByTile(z: Int, x: Int, y: Int, queryString: String = ""): ByteArray {
+        val n = 1 shl z
+        val minLon = x.toDouble() / n * 360.0 - 180.0
+        val maxLon = (x + 1).toDouble() / n * 360.0 - 180.0
+        val maxLat = Math.toDegrees(atan(sinh(Math.PI * (1.0 - 2.0 * y / n))))
+        val minLat = Math.toDegrees(atan(sinh(Math.PI * (1.0 - 2.0 * (y + 1) / n))))
+        val boxQuery = LatLonPoint.newBoxQuery("location", minLat, maxLat, minLon, maxLon)
+        val query = if (queryString.isBlank()) boxQuery else BooleanQuery.Builder()
+            .add(QueryParser("tags", analyzer).parse(queryString), BooleanClause.Occur.MUST)
+            .add(boxQuery, BooleanClause.Occur.FILTER)
+            .build()
+        val reader = DirectoryReader.open(writer)
+        val geomFactory = GeometryFactory()
+        val converter = UserDataKeyValueMapConverter()
+        val layerParams = MvtLayerParams.DEFAULT
+        return reader.use { r ->
+            val searcher = IndexSearcher(r)
+            val topDocs = searcher.search(query, Int.MAX_VALUE)
+            val storedFields = searcher.storedFields()
+            val points = topDocs.scoreDocs.mapNotNull { scoreDoc ->
+                val doc = storedFields.document(scoreDoc.doc)
+                val lat = doc.getField("lat")?.numericValue()?.toDouble() ?: return@mapNotNull null
+                val lon = doc.getField("lon")?.numericValue()?.toDouble() ?: return@mapNotNull null
+                val px = ((lon + 180.0) / 360.0 * n - x) * layerParams.extent
+                val latRad = Math.toRadians(lat)
+                val py = ((1.0 - ln(tan(latRad) + 1.0 / cos(latRad)) / Math.PI) / 2.0 * n - y) * layerParams.extent
+                val point = geomFactory.createPoint(Coordinate(px, py))
+                point.userData = mapOf("path" to "$basePath/${doc.get("path")}")
+                point
+            }
+            val layer = JtsLayer("photos", points)
+            val mvt = JtsMvt(layer)
+            MvtEncoder.encode(mvt, layerParams, converter)
+        }
     }
 
     fun delete(filePath: String) {

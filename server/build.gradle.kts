@@ -12,6 +12,7 @@ dependencies {
     implementation(libs.kfswatch)
     implementation(libs.kotlinxCoroutines)
     implementation(libs.kotlinLogging)
+    implementation(libs.mvt)
     runtimeOnly(libs.logback)
 }
 

@@ -17,7 +17,7 @@
         .search-bar {
             display: flex;
             gap: 0.5rem;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
         }
 
         #search-input {
@@ -32,6 +32,29 @@
         }
 
         #search-input:focus {
+            border-color: #4a90d9;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .tab-btn {
+            padding: 0.35rem 1rem;
+            border-radius: 6px;
+            border: 1px solid #333;
+            background: #1c1c1c;
+            color: #888;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-family: inherit;
+        }
+
+        .tab-btn.active {
+            background: #4a90d9;
+            color: #fff;
             border-color: #4a90d9;
         }
 
@@ -73,15 +96,40 @@
             object-fit: cover;
             display: block;
         }
+
+        #map-view { display: none; }
+
+        .maplibregl-popup-content {
+            padding: 0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: calc(100vh - 9rem);
+            min-height: 400px;
+            border-radius: 6px;
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
     <div class="search-bar">
         <input id="search-input" type="text" placeholder="Search images…" autofocus />
     </div>
-    <p id="status"></p>
-    <div id="image-grid"></div>
-    <div id="scroll-sentinel"></div>
+    <div class="tabs">
+        <button id="tab-list" class="tab-btn active">List</button>
+        <button id="tab-map" class="tab-btn">Map</button>
+    </div>
+    <div id="list-view">
+        <p id="status"></p>
+        <div id="image-grid"></div>
+        <div id="scroll-sentinel"></div>
+    </div>
+    <div id="map-view">
+        <div id="map"></div>
+    </div>
     <script src="client.js"></script>
 </body>
 </html>

@@ -14,6 +14,7 @@ kim = "0.26.2"
 logback = "1.5.32"
 kotlinLogging = "8.0.01"
 shadow = "8.3.8"
+mvt = "25.1.0"
 
 [libraries]
 kotlinGradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -31,6 +32,7 @@ kfswatch = { module = "io.github.irgaly.kfswatch:kfswatch", version.ref = "kfswa
 kim = { module = "com.ashampoo:kim", version.ref = "kim" }
 logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 kotlinLogging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
+mvt = { module = "io.github.sebasbaumh:mapbox-vector-tile-java", version.ref = "mvt" }
 
 # Libraries can be bundled together for easier import
 [bundles]

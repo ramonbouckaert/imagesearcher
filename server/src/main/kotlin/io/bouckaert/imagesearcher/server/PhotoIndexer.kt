@@ -35,7 +35,7 @@ class PhotoIndexer(
                 val relativePath = file.relativeTo(base).path
                 logger.debug { "Indexing $relativePath" }
                 val xmp = XmpReader.read(file)
-                index.index(relativePath, xmp.tags, xmp.description, file.lastModified())
+                index.index(relativePath, xmp.tags, xmp.description, file.lastModified(), xmp.lat, xmp.lon)
             }
         }
         jobs.joinAll()
