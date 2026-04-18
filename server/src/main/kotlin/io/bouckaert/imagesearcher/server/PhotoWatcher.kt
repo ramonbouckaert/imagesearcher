@@ -7,6 +7,8 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Path
@@ -21,7 +23,10 @@ class PhotoWatcher(
     private val imageExtensions = setOf("avif", "gif")
     private val scan = scanRoot.toFile()
     private val base = libraryRoot.toFile()
-    private val queue = Channel<Pair<File, KfsEvent>>(Channel.UNLIMITED)
+
+    private val pending = LinkedHashMap<String, Pair<File, KfsEvent>>()
+    private val mutex = Mutex()
+    private val queue = Channel<String>(Channel.UNLIMITED)
 
     suspend fun watch() = coroutineScope {
         val watcher = KfsDirectoryWatcher(scope = this)
@@ -31,12 +36,15 @@ class PhotoWatcher(
             ?.forEach { watcher.add(it.absolutePath) }
 
         watcher.onEventFlow.collect { event ->
-            queue.send(Pair(File(event.targetDirectory, event.path), event.event))
+            val file = File(event.targetDirectory, event.path)
+            mutex.withLock { pending[file.absolutePath] = Pair(file, event.event) }
+            queue.send(file.absolutePath)
         }
     }
 
     suspend fun drain() {
-        for ((file, kind) in queue) {
+        for (path in queue) {
+            val (file, kind) = mutex.withLock { pending.remove(path) } ?: continue
             processEvent(file, kind)
         }
     }
