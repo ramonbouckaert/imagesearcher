@@ -13,6 +13,7 @@ kfswatch = "1.4.0"
 kim = "0.26.2"
 logback = "1.5.32"
 kotlinLogging = "8.0.01"
+shadow = "8.3.8"
 
 [libraries]
 kotlinGradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -39,3 +40,4 @@ lucene = ["luceneCore", "luceneQueryparser", "luceneQueries"]
 
 [plugins]
 kotlinPluginSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
