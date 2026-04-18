@@ -10,7 +10,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.apache.lucene.store.ByteBuffersDirectory
-import org.apache.lucene.store.FSDirectory
 import kotlin.io.path.Path
 
 private val logger = KotlinLogging.logger {}
@@ -21,14 +20,7 @@ fun main() {
     val basePath = System.getenv("URL_BASE_PATH") ?: libraryRoot.toString()
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
 
-    val luceneDirectory = if (System.getenv("LUCENE_IN_MEMORY").toBoolean()) {
-        logger.info { "Using in-memory Lucene index" }
-        ByteBuffersDirectory()
-    } else {
-        val indexPath = Path(System.getenv("LUCENE_INDEX_PATH") ?: "./lucene-index")
-        logger.info { "Using on-disk Lucene index at $indexPath" }
-        FSDirectory.open(indexPath)
-    }
+    val luceneDirectory = ByteBuffersDirectory()
 
     LuceneIndex(luceneDirectory).use { index ->
         runBlocking {
