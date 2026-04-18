@@ -1,6 +1,6 @@
-package io.bouckaert.imagesearch.server
+package io.bouckaert.imagesearcher.server
 
-import io.bouckaert.imagesearch.utils.XmpReader
+import io.bouckaert.imagesearcher.utils.XmpReader
 import io.github.irgaly.kfswatch.KfsDirectoryWatcher
 import io.github.irgaly.kfswatch.KfsEvent
 import io.github.oshai.kotlinlogging.KotlinLogging

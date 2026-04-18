@@ -1,4 +1,4 @@
-package io.bouckaert.imagesearch.server
+package io.bouckaert.imagesearcher.server
 
 import io.ktor.server.http.content.*
 import io.ktor.server.response.*

@@ -24,6 +24,6 @@ tasks.named<ProcessResources>("processResources") {
 }
 
 application {
-    // (Note that Kotlin compiles `App.kt` to a class with FQN `io.bouckaert.imagesearch.server.AppKt`.)
-    mainClass = "io.bouckaert.imagesearch.server.AppKt"
+    // (Note that Kotlin compiles `App.kt` to a class with FQN `io.bouckaert.imagesearcher.server.AppKt`.)
+    mainClass = "io.bouckaert.imagesearcher.server.AppKt"
 }

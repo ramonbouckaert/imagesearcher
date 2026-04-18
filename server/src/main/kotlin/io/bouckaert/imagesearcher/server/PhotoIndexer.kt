@@ -1,6 +1,6 @@
-package io.bouckaert.imagesearch.server
+package io.bouckaert.imagesearcher.server
 
-import io.bouckaert.imagesearch.utils.XmpReader
+import io.bouckaert.imagesearcher.utils.XmpReader
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async

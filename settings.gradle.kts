@@ -23,4 +23,4 @@ include(":server")
 include(":utils")
 include(":client")
 
-rootProject.name = "imagesearch"
+rootProject.name = "imagesearcher"

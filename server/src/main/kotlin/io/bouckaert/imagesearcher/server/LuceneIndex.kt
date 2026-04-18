@@ -1,7 +1,7 @@
-package io.bouckaert.imagesearch.server
+package io.bouckaert.imagesearcher.server
 
-import io.bouckaert.imagesearch.utils.SearchResponse
-import io.bouckaert.imagesearch.utils.SearchResult
+import io.bouckaert.imagesearcher.utils.SearchResponse
+import io.bouckaert.imagesearcher.utils.SearchResult
 import org.apache.lucene.analysis.standard.StandardAnalyzer
 import org.apache.lucene.document.Document
 import org.apache.lucene.document.Field
