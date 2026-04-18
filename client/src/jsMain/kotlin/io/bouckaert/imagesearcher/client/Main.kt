@@ -24,7 +24,7 @@ external class IntersectionObserverEntry {
     val isIntersecting: Boolean
 }
 
-private const val PAGE_SIZE = 20
+private const val PAGE_SIZE = 30
 private const val DEBOUNCE_MS = 350
 
 private val scope = MainScope()
