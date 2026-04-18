@@ -27,7 +27,7 @@ class PhotoWatcher(
             ?.forEach { watcher.add(it.absolutePath) }
 
         watcher.onEventFlow.collect { event ->
-            val file = File(event.path)
+            val file = File(event.targetDirectory, event.path)
             val relativePath = file.relativeTo(base).path
             when (event.event) {
                 KfsEvent.Create -> {
