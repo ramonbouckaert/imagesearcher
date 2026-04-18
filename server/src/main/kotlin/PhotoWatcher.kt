@@ -32,23 +32,23 @@ class PhotoWatcher(
             when (event.event) {
                 KfsEvent.Create -> {
                     if (file.isDirectory) {
-                        logger.debug { "Watching new directory $relativePath" }
+                        logger.info { "Watching new directory $relativePath" }
                         watcher.add(file.absolutePath)
                     } else if (file.extension.lowercase() in imageExtensions) {
-                        logger.debug { "Indexing new file $relativePath" }
+                        logger.info { "Indexing new file $relativePath" }
                         val xmp = XmpReader.read(file)
                         index.index(relativePath, xmp.tags, xmp.description, file.lastModified())
                         index.commit()
                     }
                 }
                 KfsEvent.Delete -> {
-                    logger.debug { "Removing deleted file $relativePath" }
+                    logger.info { "Removing deleted file $relativePath" }
                     index.delete(relativePath)
                     index.commit()
                 }
                 KfsEvent.Modify -> {
                     if (file.isFile && file.extension.lowercase() in imageExtensions) {
-                        logger.debug { "Re-indexing modified file $relativePath" }
+                        logger.info { "Re-indexing modified file $relativePath" }
                         val xmp = XmpReader.read(file)
                         index.index(relativePath, xmp.tags, xmp.description, file.lastModified())
                         index.commit()

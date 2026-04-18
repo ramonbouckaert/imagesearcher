@@ -10,7 +10,6 @@ import org.apache.lucene.document.StoredField
 import org.apache.lucene.document.StringField
 import org.apache.lucene.document.TextField
 import org.apache.lucene.index.DirectoryReader
-import org.apache.lucene.index.IndexReader
 import org.apache.lucene.index.IndexWriter
 import org.apache.lucene.index.IndexWriterConfig
 import org.apache.lucene.index.Term
@@ -19,7 +18,9 @@ import org.apache.lucene.queryparser.classic.QueryParser
 import org.apache.lucene.search.DoubleValues
 import org.apache.lucene.search.DoubleValuesSource
 import org.apache.lucene.search.IndexSearcher
-import org.apache.lucene.search.TermQuery
+import org.apache.lucene.search.MatchAllDocsQuery
+import org.apache.lucene.search.Sort
+import org.apache.lucene.search.SortField
 import org.apache.lucene.store.Directory
 import org.apache.lucene.index.LeafReaderContext
 import java.io.Closeable
@@ -31,10 +32,19 @@ class LuceneIndex(private val directory: Directory) : Closeable {
     private val analyzer = StandardAnalyzer()
     private val writer = IndexWriter(directory, IndexWriterConfig(analyzer))
 
-    fun isIndexed(filePath: String): Boolean {
+    fun getAllIndexedPaths(): Set<String> {
         val reader = DirectoryReader.open(writer)
         return reader.use { r ->
-            IndexSearcher(r).search(TermQuery(Term("path", filePath)), 1).totalHits.value > 0
+            val paths = HashSet<String>(r.numDocs())
+            for (leaf in r.leaves()) {
+                val termsEnum = leaf.reader().terms("path")?.iterator() ?: continue
+                var term = termsEnum.next()
+                while (term != null) {
+                    paths.add(term.utf8ToString())
+                    term = termsEnum.next()
+                }
+            }
+            paths
         }
     }
 
@@ -58,20 +68,30 @@ class LuceneIndex(private val directory: Directory) : Closeable {
     }
 
     fun search(query: String, limit: Int = 20, offset: Int = 0): SearchResponse {
-        if (query.isBlank()) return SearchResponse(0, emptyList())
         val reader = DirectoryReader.open(writer)
         return reader.use { r ->
             val searcher = IndexSearcher(r)
-            val baseQuery = QueryParser("tags", analyzer).parse(query)
-            val total = searcher.count(baseQuery)
-            val boostedQuery = FunctionScoreQuery.boostByValue(baseQuery, recencyBoostSource())
-            val topDocs = searcher.search(boostedQuery, (offset + limit).coerceAtLeast(1))
-            val storedFields = searcher.storedFields()
-            val results = topDocs.scoreDocs.drop(offset).map { scoreDoc ->
-                val doc = storedFields.document(scoreDoc.doc)
-                SearchResult(doc.get("path"), doc.get("description"), scoreDoc.score)
+            if (query.isBlank()) {
+                val sort = Sort(SortField("lastModified", SortField.Type.LONG, true))
+                val topDocs = searcher.search(MatchAllDocsQuery.INSTANCE, (offset + limit).coerceAtLeast(1), sort)
+                val storedFields = searcher.storedFields()
+                val results = topDocs.scoreDocs.drop(offset).map { scoreDoc ->
+                    val doc = storedFields.document(scoreDoc.doc)
+                    SearchResult(doc.get("path"), doc.get("description"), 0f)
+                }
+                SearchResponse(r.numDocs(), results)
+            } else {
+                val baseQuery = QueryParser("tags", analyzer).parse(query)
+                val total = searcher.count(baseQuery)
+                val boostedQuery = FunctionScoreQuery.boostByValue(baseQuery, recencyBoostSource())
+                val topDocs = searcher.search(boostedQuery, (offset + limit).coerceAtLeast(1))
+                val storedFields = searcher.storedFields()
+                val results = topDocs.scoreDocs.drop(offset).map { scoreDoc ->
+                    val doc = storedFields.document(scoreDoc.doc)
+                    SearchResult(doc.get("path"), doc.get("description"), scoreDoc.score)
+                }
+                SearchResponse(total, results)
             }
-            SearchResponse(total, results)
         }
     }
 

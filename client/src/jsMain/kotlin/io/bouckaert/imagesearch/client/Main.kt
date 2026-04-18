@@ -18,8 +18,6 @@ external class IntersectionObserver(
     callback: (entries: Array<IntersectionObserverEntry>, observer: IntersectionObserver) -> Unit,
 ) {
     fun observe(target: Element)
-    fun unobserve(target: Element)
-    fun disconnect()
 }
 
 external class IntersectionObserverEntry {
@@ -54,19 +52,13 @@ fun main() {
         })
         observer.observe(sentinel)
 
+        scope.launch { loadPage(grid, status, sentinel) }
+
         var debounceHandle = 0
         input.addEventListener("input", {
             window.clearTimeout(debounceHandle)
-            val query = input.value.trim()
-            if (query.isBlank()) {
-                grid.innerHTML = ""
-                status.textContent = ""
-                currentQuery = ""
-                hasMore = false
-                return@addEventListener
-            }
             debounceHandle = window.setTimeout({
-                currentQuery = query
+                currentQuery = input.value.trim()
                 currentOffset = 0
                 totalLoaded = 0
                 hasMore = false

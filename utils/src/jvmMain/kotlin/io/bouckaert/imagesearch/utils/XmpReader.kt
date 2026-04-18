@@ -1,6 +1,7 @@
 package io.bouckaert.imagesearch.utils
 
 import com.ashampoo.kim.Kim
+import com.ashampoo.kim.input.JvmInputStreamByteReader
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -15,9 +16,12 @@ object XmpReader {
 
     fun read(file: File): XmpData {
         return try {
-            val metadata = Kim.readMetadata(file.readBytes()) ?: return XmpData(emptyList(), null)
+            val metadata = Kim.readMetadata(JvmInputStreamByteReader(file.inputStream(), file.length()))
+                ?: return XmpData(emptyList(), null)
             val xmpString = metadata.xmp ?: return XmpData(emptyList(), null)
-            val doc = xmlFactory.newDocumentBuilder().parse(xmpString.byteInputStream())
+            val doc = xmlFactory.newDocumentBuilder().parse(
+                xmpString.trimStart('\uFEFF').trim().byteInputStream()
+            )
             XmpData(tags = readTags(doc), description = readDescription(doc))
         } catch (_: Exception) {
             XmpData(emptyList(), null)
