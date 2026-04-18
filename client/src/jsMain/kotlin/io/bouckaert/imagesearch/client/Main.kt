@@ -8,12 +8,11 @@ import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.w3c.dom.Element
-import org.w3c.dom.HTMLButtonElement
+import org.w3c.dom.HTMLAnchorElement
 import org.w3c.dom.HTMLDivElement
 import org.w3c.dom.HTMLImageElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.HTMLParagraphElement
-import org.w3c.dom.events.KeyboardEvent
 
 external class IntersectionObserver(
     callback: (entries: Array<IntersectionObserverEntry>, observer: IntersectionObserver) -> Unit,
@@ -28,6 +27,7 @@ external class IntersectionObserverEntry {
 }
 
 private const val PAGE_SIZE = 20
+private const val DEBOUNCE_MS = 350
 
 private val scope = MainScope()
 private val json = Json { ignoreUnknownKeys = true }
@@ -43,7 +43,6 @@ external fun encodeURIComponent(value: String): String
 fun main() {
     document.addEventListener("DOMContentLoaded", {
         val input = document.getElementById("search-input") as HTMLInputElement
-        val button = document.getElementById("search-button") as HTMLButtonElement
         val grid = document.getElementById("image-grid") as HTMLDivElement
         val status = document.getElementById("status") as HTMLParagraphElement
         val sentinel = document.getElementById("scroll-sentinel") as HTMLDivElement
@@ -55,20 +54,25 @@ fun main() {
         })
         observer.observe(sentinel)
 
-        fun triggerSearch() {
+        var debounceHandle = 0
+        input.addEventListener("input", {
+            window.clearTimeout(debounceHandle)
             val query = input.value.trim()
-            if (query.isBlank() || isLoading) return
-            currentQuery = query
-            currentOffset = 0
-            totalLoaded = 0
-            hasMore = false
-            grid.innerHTML = ""
-            scope.launch { loadPage(grid, status, sentinel) }
-        }
-
-        button.addEventListener("click", { triggerSearch() })
-        input.addEventListener("keydown", { event ->
-            if ((event as KeyboardEvent).key == "Enter") triggerSearch()
+            if (query.isBlank()) {
+                grid.innerHTML = ""
+                status.textContent = ""
+                currentQuery = ""
+                hasMore = false
+                return@addEventListener
+            }
+            debounceHandle = window.setTimeout({
+                currentQuery = query
+                currentOffset = 0
+                totalLoaded = 0
+                hasMore = false
+                grid.innerHTML = ""
+                scope.launch { loadPage(grid, status, sentinel) }
+            }, DEBOUNCE_MS)
         })
     })
 }
@@ -91,13 +95,30 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
     val (total, results) = json.decodeFromString<SearchResponse>(response.text().await())
 
     results.forEach { result ->
+        val link = document.createElement("a") as HTMLAnchorElement
+        link.href = result.path
+        link.className = "grid-item"
+        link.style.opacity = "0"
+        link.style.setProperty("flex-grow", "1")
+        link.style.setProperty("flex-basis", "220px")
+        link.style.setProperty("aspect-ratio", "1")
+
         val img = document.createElement("img") as HTMLImageElement
         img.src = result.path
         img.alt = result.description ?: result.path.substringAfterLast("/")
-        img.className = "grid-item"
+        result.description?.let { img.title = it }
         img.setAttribute("loading", "lazy")
         img.setAttribute("decoding", "async")
-        grid.appendChild(img)
+        img.addEventListener("load", {
+            val ratio = (img.naturalWidth.toDouble() / img.naturalHeight).coerceIn(0.5, 2.5)
+            link.style.setProperty("flex-grow", ratio.toString())
+            link.style.setProperty("flex-basis", "${(ratio * 220).toInt()}px")
+            link.style.setProperty("aspect-ratio", ratio.toString())
+            link.style.removeProperty("opacity")
+        })
+
+        link.appendChild(img)
+        grid.appendChild(link)
     }
 
     totalLoaded += results.size
@@ -111,7 +132,7 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
         else -> "$total results"
     }
 
-    // If the sentinel is already visible after loading (short page), keep filling
+    // If the sentinel is still visible after loading, keep filling
     if (hasMore && sentinel.getBoundingClientRect().top < window.innerHeight) {
         loadPage(grid, status, sentinel)
     }
