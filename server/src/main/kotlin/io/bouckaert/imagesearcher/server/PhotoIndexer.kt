@@ -42,22 +42,20 @@ class PhotoIndexer(
         if (toIndex.isNotEmpty()) index.commit()
     }
 
+    private fun File.isIndexableImage(base: File, indexed: Set<String>) =
+        isFile && extension.lowercase() in imageExtensions && relativeTo(base).path !in indexed
+
     private suspend fun collectUnindexed(dir: File, base: File, indexed: Set<String>): List<File> = coroutineScope {
         val topEntries = dir.listFiles() ?: return@coroutineScope emptyList()
+        val topFiles = topEntries.filter { it.isIndexableImage(base, indexed) }
         val subDirs = topEntries.filter { it.isDirectory }
 
-        subDirs.map { subDir ->
+        topFiles + subDirs.map { subDir ->
             async {
                 val entries = subDir.listFiles() ?: return@async emptyList<File>()
                 val chunkSize = (entries.size / WORKERS).coerceAtLeast(1)
                 entries.toList().chunked(chunkSize).map { chunk ->
-                    async {
-                        chunk.filter {
-                            it.extension.lowercase() in imageExtensions &&
-                            it.isFile &&
-                            it.relativeTo(base).path !in indexed
-                        }
-                    }
+                    async { chunk.filter { it.isIndexableImage(base, indexed) } }
                 }.awaitAll().flatten()
             }
         }.awaitAll().flatten()

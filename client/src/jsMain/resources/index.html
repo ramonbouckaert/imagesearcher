@@ -50,7 +50,12 @@
 
         #image-grid::after {
             content: '';
-            flex: 9999 1 100%;
+            flex: 9999 1 0;
+        }
+
+        @media (max-width: 600px) {
+            #image-grid::after { display: none; }
+            .grid-item { flex-basis: 100% !important; }
         }
 
         .grid-item {
