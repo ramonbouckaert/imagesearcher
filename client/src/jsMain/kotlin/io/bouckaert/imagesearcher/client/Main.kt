@@ -109,6 +109,8 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
             link.style.removeProperty("opacity")
         })
 
+        if (result.description == null) link.style.setProperty("outline", "3px solid rgba(220,50,50,0.7)")
+
         link.appendChild(img)
         grid.appendChild(link)
     }
