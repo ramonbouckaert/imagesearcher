@@ -32,18 +32,21 @@ fun main() {
 
     LuceneIndex(luceneDirectory).use { index ->
         runBlocking {
+            val watcher = PhotoWatcher(scanRoot, libraryRoot, index)
+            val watchJob = launch { watcher.watch() }
+
             logger.info { "Indexing existing photos in $scanRoot..." }
             PhotoIndexer(scanRoot, libraryRoot, index).indexAll()
             logger.info { "Indexing complete. Listening on port $port." }
 
-            val watcherJob = launch { PhotoWatcher(scanRoot, libraryRoot, index).watch() }
+            launch { watcher.drain() }
 
             embeddedServer(CIO, port = port) {
                 install(ContentNegotiation) { json() }
                 routing { searchRoutes(index, basePath) }
             }.start(wait = true)
 
-            watcherJob.cancel()
+            watchJob.cancel()
         }
     }
 }
