@@ -1,0 +1,40 @@
+# Version catalog is a central place for you to declare and version dependencies
+# https://docs.gradle.org/current/userguide/platforms.html#sub:version-catalog
+# https://docs.gradle.org/current/userguide/platforms.html#sub::toml-dependencies-format
+
+[versions]
+kotlin = "2.3.20"
+kotlinxDatetime = "0.7.1"
+kotlinxSerializationJSON = "1.11.0"
+kotlinxCoroutines = "1.10.2"
+ktor = "3.4.2"
+lucene = "10.4.0"
+kfswatch = "1.4.0"
+kim = "0.26.2"
+logback = "1.5.32"
+kotlinLogging = "8.0.01"
+
+[libraries]
+kotlinGradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+kotlinxDatetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+kotlinxSerialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJSON" }
+kotlinxCoroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+ktorServerCore = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
+ktorServerCio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
+ktorServerContentNegotiation = { module = "io.ktor:ktor-server-content-negotiation", version.ref = "ktor" }
+ktorSerializationKotlinxJson = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+luceneCore = { module = "org.apache.lucene:lucene-core", version.ref = "lucene" }
+luceneQueryparser = { module = "org.apache.lucene:lucene-queryparser", version.ref = "lucene" }
+kfswatch = { module = "io.github.irgaly.kfswatch:kfswatch", version.ref = "kfswatch" }
+kim = { module = "com.ashampoo:kim", version.ref = "kim" }
+logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+kotlinLogging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
+
+# Libraries can be bundled together for easier import
+[bundles]
+kotlinxEcosystem = ["kotlinxDatetime", "kotlinxSerialization", "kotlinxCoroutines"]
+ktorServer = ["ktorServerCore", "ktorServerCio", "ktorServerContentNegotiation", "ktorSerializationKotlinxJson"]
+lucene = ["luceneCore", "luceneQueryparser"]
+
+[plugins]
+kotlinPluginSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
