@@ -1,5 +1,6 @@
 package io.bouckaert.imagesearch.server
 
+import io.ktor.server.http.content.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
@@ -10,5 +11,8 @@ fun Routing.searchRoutes(index: LuceneIndex, basePath: String) {
             result.copy(path = "$basePath/${result.path}")
         }
         call.respond(results)
+    }
+    staticResources("/", "static") {
+        default("index.html")
     }
 }

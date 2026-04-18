@@ -14,6 +14,15 @@ dependencies {
     runtimeOnly(libs.logback)
 }
 
+val clientDist = project(":client").tasks.named("jsBrowserDistribution")
+
+tasks.named<ProcessResources>("processResources") {
+    dependsOn(clientDist)
+    into("static") {
+        from(clientDist.map { it.outputs.files })
+    }
+}
+
 application {
     // (Note that Kotlin compiles `App.kt` to a class with FQN `io.bouckaert.imagesearch.server.AppKt`.)
     mainClass = "io.bouckaert.imagesearch.server.AppKt"
