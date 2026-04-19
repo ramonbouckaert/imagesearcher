@@ -43,6 +43,14 @@ import kotlin.math.tan
 private const val RECENCY_WINDOW_MS = 10L * 365 * 24 * 60 * 60 * 1000 // 10 years
 private const val RECENCY_MAX_BOOST = 0.2 // newest images score up to 20% higher
 
+private const val CLUSTER_TILE_RADIUS = 240.0
+private const val CLUSTER_TILE_RADIUS_SQ = CLUSTER_TILE_RADIUS * CLUSTER_TILE_RADIUS
+
+private data class TilePoint(
+    val px: Double, val py: Double,
+    val path: String, val score: Float, val lastModifiedMs: Long
+)
+
 class LuceneIndex(private val directory: Directory, private val basePath: String) : Closeable {
     private val analyzer = StandardAnalyzer()
     private val writer = IndexWriter(directory, IndexWriterConfig(analyzer))
@@ -69,6 +77,7 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
             add(StoredField("tagsStored", tags.joinToString(",")))
             add(TextField("tags", tags.joinToString(" "), Field.Store.NO))
             add(NumericDocValuesField("lastModified", lastModifiedMs))
+            add(StoredField("lastModifiedMs", lastModifiedMs))
             if (description != null) add(StoredField("description", description))
             if (lat != null && lon != null) {
                 add(LatLonPoint("location", lat, lon))
@@ -98,15 +107,54 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
             val searcher = IndexSearcher(r)
             val topDocs = searcher.search(query, Int.MAX_VALUE)
             val storedFields = searcher.storedFields()
-            val points = topDocs.scoreDocs.mapNotNull { scoreDoc ->
+
+            val candidates = topDocs.scoreDocs.mapNotNull { scoreDoc ->
                 val doc = storedFields.document(scoreDoc.doc)
                 val lat = doc.getField("lat")?.numericValue()?.toDouble() ?: return@mapNotNull null
                 val lon = doc.getField("lon")?.numericValue()?.toDouble() ?: return@mapNotNull null
                 val px = ((lon + 180.0) / 360.0 * n - x) * layerParams.extent
                 val latRad = Math.toRadians(lat)
                 val py = ((1.0 - ln(tan(latRad) + 1.0 / cos(latRad)) / Math.PI) / 2.0 * n - y) * layerParams.extent
-                val point = geomFactory.createPoint(Coordinate(px, py))
-                point.userData = mapOf("path" to "$basePath/${doc.get("path")}")
+                val lastModifiedMs = doc.getField("lastModifiedMs")?.numericValue()?.toLong() ?: 0L
+                TilePoint(px, py, "$basePath/${doc.get("path")}", scoreDoc.score, lastModifiedMs)
+            }
+
+            val sorted = if (queryString.isBlank())
+                candidates.sortedByDescending { it.lastModifiedMs }
+            else
+                candidates.sortedWith(compareByDescending<TilePoint> { it.score }.thenByDescending { it.lastModifiedMs })
+
+            val grid = HashMap<Pair<Int, Int>, MutableList<TilePoint>>()
+            val accepted = mutableListOf<TilePoint>()
+            val counts = HashMap<TilePoint, Int>()
+            for (c in sorted) {
+                val cx = (c.px / CLUSTER_TILE_RADIUS).toInt()
+                val cy = (c.py / CLUSTER_TILE_RADIUS).toInt()
+                var occludedBy: TilePoint? = null
+                outer@ for (dx in -1..1) {
+                    for (dy in -1..1) {
+                        for (existing in grid[Pair(cx + dx, cy + dy)] ?: continue) {
+                            val ddx = c.px - existing.px
+                            val ddy = c.py - existing.py
+                            if (ddx * ddx + ddy * ddy < CLUSTER_TILE_RADIUS_SQ) {
+                                occludedBy = existing
+                                break@outer
+                            }
+                        }
+                    }
+                }
+                if (occludedBy == null) {
+                    grid.getOrPut(Pair(cx, cy)) { mutableListOf() }.add(c)
+                    accepted.add(c)
+                    counts[c] = 1
+                } else {
+                    counts[occludedBy] = (counts[occludedBy] ?: 1) + 1
+                }
+            }
+
+            val points = accepted.map { c ->
+                val point = geomFactory.createPoint(Coordinate(c.px, c.py))
+                point.userData = mapOf("path" to c.path, "count" to (counts[c] ?: 1))
                 point
             }
             val layer = JtsLayer("photos", points)

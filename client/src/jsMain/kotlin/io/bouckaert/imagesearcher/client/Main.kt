@@ -27,6 +27,8 @@ external class IntersectionObserverEntry {
 
 private const val PAGE_SIZE = 30
 private const val DEBOUNCE_MS = 350
+private const val POPUP_MIN_ZOOM = 0
+private const val MAX_POPUPS = 30
 
 private val scope = MainScope()
 private val json = Json { ignoreUnknownKeys = true }
@@ -38,9 +40,15 @@ private var isLoading = false
 private var hasMore = false
 
 private var currentTab = "list"
+private var listQuery = ""
 private var map: dynamic = null
-private var popup: dynamic = null
 private var mapLoaded = false
+private val popups = mutableMapOf<String, dynamic>()
+private val popupCoords = mutableMapOf<String, dynamic>()
+private val popupCounts = mutableMapOf<String, Int>()
+private val visiblePopupPaths = mutableSetOf<String>()
+private var popupUpdateHandle = 0
+private var updatingPopups = false
 
 external fun encodeURIComponent(value: String): String
 
@@ -71,6 +79,14 @@ fun main() {
                 tabMap.className = "tab-btn"
                 listView.style.display = "block"
                 mapView.style.display = "none"
+                if (currentQuery != listQuery) {
+                    listQuery = currentQuery
+                    currentOffset = 0
+                    totalLoaded = 0
+                    hasMore = false
+                    grid.innerHTML = ""
+                    scope.launch { loadPage(grid, status, sentinel) }
+                }
             }
         })
 
@@ -95,6 +111,7 @@ fun main() {
             debounceHandle = window.setTimeout({
                 currentQuery = input.value.trim()
                 if (currentTab == "list") {
+                    listQuery = currentQuery
                     currentOffset = 0
                     totalLoaded = 0
                     hasMore = false
@@ -129,7 +146,6 @@ private fun loadMapLibre(onReady: () -> Unit) {
 private fun initMap(query: String) {
     loadMapLibre {
         map = js("new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/dark', attributionControl: true, center: [149.1300, -35.2809], zoom: 11 })")
-        popup = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, maxWidth: 'none' })")
         map.on("load") {
             mapLoaded = true
             addMapSource(query)
@@ -142,14 +158,16 @@ private fun addMapSource(query: String) {
     src["type"] = "vector"
     src["tiles"] = arrayOf(tileUrl(query))
     src["minzoom"] = 0
-    src["maxzoom"] = 14
+    src["maxzoom"] = 20
     map.addSource("photos", src)
 
     val paint: dynamic = js("({})")
-    paint["circle-radius"] = 6
-    paint["circle-color"] = "#4a90d9"
-    paint["circle-stroke-width"] = 1
+    paint["circle-radius"] = js("['case', ['>', ['get', 'count'], 1], 12, 6]")
+    paint["circle-color"] = "#000"
+    paint["circle-opacity"] = 0
+    paint["circle-stroke-width"] = 2
     paint["circle-stroke-color"] = "#fff"
+    paint["circle-stroke-opacity"] = 1
 
     val layer: dynamic = js("({})")
     layer["id"] = "photo-points"
@@ -159,28 +177,40 @@ private fun addMapSource(query: String) {
     layer["paint"] = paint
     map.addLayer(layer)
 
-    var hoveredPath = ""
+    val labelLayout: dynamic = js("({})")
+    labelLayout["text-field"] = js("['to-string', ['get', 'count']]")
+    labelLayout["text-size"] = 11
+    labelLayout["text-allow-overlap"] = true
+    labelLayout["text-ignore-placement"] = true
 
-    map.on("mousemove", "photo-points") { e: dynamic ->
-        map.getCanvas().style.cursor = "pointer"
-        val path = e.features[0].properties.path as String
-        if (path != hoveredPath) {
-            hoveredPath = path
-            val coords = e.features[0].geometry.coordinates
-            val html = """<img src="$path" style="width:150px;height:150px;object-fit:cover;display:block;">"""
-            popup.setLngLat(coords).setHTML(html).addTo(map)
-        }
-    }
+    val labelPaint: dynamic = js("({})")
+    labelPaint["text-color"] = "#ffffff"
+
+    val labelLayer: dynamic = js("({})")
+    labelLayer["id"] = "photo-count-labels"
+    labelLayer["type"] = "symbol"
+    labelLayer["source"] = "photos"
+    labelLayer["source-layer"] = "photos"
+    labelLayer["filter"] = js("['>', 'count', 1]")
+    labelLayer["layout"] = labelLayout
+    labelLayer["paint"] = labelPaint
+    map.addLayer(labelLayer)
 
     map.on("click", "photo-points") { e: dynamic ->
-        val path = e.features[0].properties.path as String
-        window.open(path, "_blank")
+        window.open(e.features[0].properties.path as String, "_blank")
+    }
+
+    map.on("mousemove", "photo-points") { _: dynamic ->
+        map.getCanvas().style.cursor = "pointer"
     }
 
     map.on("mouseleave", "photo-points") { _: dynamic ->
         map.getCanvas().style.cursor = ""
-        hoveredPath = ""
-        popup.remove()
+    }
+
+    map.on("idle") {
+        window.clearTimeout(popupUpdateHandle)
+        popupUpdateHandle = window.setTimeout({ updatePopups() }, 100)
     }
 }
 
@@ -189,6 +219,141 @@ private fun updateMapQuery(query: String) {
     if (source != null) {
         source.setTiles(arrayOf(tileUrl(query)))
     }
+}
+
+private fun forwardEvent(canvas: dynamic, event: dynamic) {
+    js("canvas.dispatchEvent(new event.constructor(event.type, event))")
+}
+
+private fun applyCircleFilter() {
+    if (visiblePopupPaths.isEmpty()) {
+        map.setFilter("photo-points", null)
+        map.setFilter("photo-count-labels", js("['>', 'count', 1]"))
+    } else {
+        val circleNotIn: dynamic = js("[]")
+        circleNotIn.push("!in")
+        circleNotIn.push("path")
+        visiblePopupPaths.forEach { circleNotIn.push(it) }
+        map.setFilter("photo-points", circleNotIn)
+
+        val labelNotIn: dynamic = js("[]")
+        labelNotIn.push("!in")
+        labelNotIn.push("path")
+        visiblePopupPaths.forEach { labelNotIn.push(it) }
+        val labelFilter: dynamic = js("[]")
+        labelFilter.push("all")
+        labelFilter.push(js("['>', 'count', 1]"))
+        labelFilter.push(labelNotIn)
+        map.setFilter("photo-count-labels", labelFilter)
+    }
+}
+
+private fun updatePopups() {
+    if (updatingPopups) return
+    updatingPopups = true
+
+    val zoom = map.getZoom() as Double
+    if (zoom < POPUP_MIN_ZOOM) {
+        if (popups.isNotEmpty()) {
+            popups.values.forEach { it.remove() }
+            popups.clear()
+            popupCoords.clear()
+            visiblePopupPaths.clear()
+            applyCircleFilter()
+        }
+        updatingPopups = false
+        return
+    }
+
+    val opts: dynamic = js("({})")
+    opts["sourceLayer"] = "photos"
+    val features = map.querySourceFeatures("photos", opts)
+    val count = features.length as Int
+
+    val seen = mutableSetOf<String>()
+    var added = 0
+    for (i in 0 until count) {
+        if (seen.size >= MAX_POPUPS) break
+        val feature = features[i]
+        val path = feature.properties.path as String
+        seen.add(path)
+        val clusterCount = (feature.properties.count as? Number)?.toInt() ?: 1
+        if (path in popups) {
+            if (clusterCount != popupCounts[path]) {
+                popupCounts[path] = clusterCount
+                val popupEl = popups[path].getElement()
+                val existingBadge: dynamic = popupEl.querySelector(".popup-count-badge")
+                if (clusterCount > 1) {
+                    if (existingBadge != null) {
+                        existingBadge.textContent = clusterCount.toString()
+                    } else {
+                        val badge: dynamic = document.createElement("span")
+                        badge.className = "popup-count-badge"
+                        badge.setAttribute("style", "position:absolute;top:4px;right:4px;background:#000;color:#fff;font-size:11px;font-weight:bold;border-radius:10px;padding:1px 6px;pointer-events:none")
+                        badge.textContent = clusterCount.toString()
+                        popupEl.querySelector(".popup-content")?.appendChild(badge)
+                    }
+                } else {
+                    if (existingBadge != null) existingBadge.remove()
+                }
+            }
+        } else {
+            val coords = feature.geometry.coordinates
+            val badge = if (clusterCount > 1) """<span class="popup-count-badge" style="position:absolute;top:4px;right:4px;background:#000;color:#fff;font-size:11px;font-weight:bold;border-radius:10px;padding:1px 6px;pointer-events:none">$clusterCount</span>""" else ""
+            val html = """<div class="popup-content" style="position:relative;display:inline-block"><img src="$path" style="width:150px;height:150px;object-fit:cover;display:block;border-radius:5px;cursor:pointer">$badge</div>"""
+            val p: dynamic = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, maxWidth: 'none' })")
+            p.setLngLat(coords).setHTML(html).addTo(map)
+            val popupEl = p.getElement()
+            popupEl.style.visibility = "hidden"
+            val canvas = map.getCanvas()
+            // Navigate on click, but only if the mouse didn't move (i.e. not a drag)
+            popupEl.addEventListener("click", { window.open(path, "_blank") })
+            // Forward scroll events so the map zooms when scrolling over a popup
+            popupEl.addEventListener("wheel", { e: dynamic ->
+                e.preventDefault()
+                forwardEvent(canvas, e)
+            }, js("{ passive: false }"))
+            // Forward mousedown so dragging works; preventDefault stops image/text drag without killing click
+            popupEl.addEventListener("mousedown", { e: dynamic ->
+                e.preventDefault()
+                forwardEvent(canvas, e)
+            })
+            // Forward touchstart without preventDefault so a tap still generates a click for navigation
+            popupEl.addEventListener("touchstart", { e: dynamic ->
+                forwardEvent(canvas, e)
+            }, js("{ passive: true }"))
+            val img = popupEl.querySelector("img")
+            img?.addEventListener("load", {
+                popupEl.style.visibility = "visible"
+                visiblePopupPaths.add(path)
+                applyCircleFilter()
+            })
+            img?.addEventListener("error", { popupEl.style.visibility = "visible" })
+            popups[path] = p
+            popupCoords[path] = coords
+            added++
+        }
+    }
+
+    val toRemove = popups.keys.filter { it !in seen }
+    toRemove.forEach { path ->
+        popups[path].remove()
+        popups.remove(path)
+        popupCoords.remove(path)
+        visiblePopupPaths.remove(path)
+    }
+    if (toRemove.isNotEmpty()) applyCircleFilter()
+
+    if (added > 0 || toRemove.isNotEmpty()) {
+        val sorted = popups.keys.sortedBy { path ->
+            map.project(popupCoords[path]).y as Double
+        }
+        sorted.forEachIndexed { index, path ->
+            popups[path].getElement().style.zIndex = (index + 1).toString()
+        }
+    }
+
+    updatingPopups = false
 }
 
 private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement, sentinel: HTMLDivElement) {
