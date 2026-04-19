@@ -405,7 +405,7 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
         img.setAttribute("decoding", "async")
         img.addEventListener("load", {
             val ratio = (img.naturalWidth.toDouble() / img.naturalHeight).coerceIn(0.5, 2.5)
-            link.style.setProperty("aspect-ratio", ratio.toString())
+            link.style.setProperty("flex-grow", (ratio * 2).toString())
             link.style.setProperty("flex-basis", "${(ratio * 15).toInt()}vmax")
             if (ratio < 1.5) link.style.setProperty("max-width", "calc(50% - 0.25rem)")
             else link.style.setProperty("max-width", "none")
