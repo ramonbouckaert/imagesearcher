@@ -336,10 +336,12 @@ private fun updatePopups() {
             val popupEl = p.getElement()
             popupEl.style.visibility = "hidden"
             img.src = path
+            val offscreenImg = document.createElement("img") as HTMLImageElement
+            offscreenImg.src = path
             scope.launch {
                 try {
                     @Suppress("UNCHECKED_CAST")
-                    (img.asDynamic().decode() as kotlin.js.Promise<Unit>).await()
+                    (offscreenImg.asDynamic().decode() as kotlin.js.Promise<Unit>).await()
                 } catch (_: Throwable) {}
                 popupEl.style.visibility = "visible"
                 visiblePopupPaths.add(path)
