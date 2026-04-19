@@ -146,7 +146,7 @@ private fun loadMapLibre(onReady: () -> Unit) {
 
 private fun initMap(query: String) {
     loadMapLibre {
-        map = js("new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/dark', attributionControl: true, center: [149.1300, -35.2809], zoom: 11 })")
+        map = js("new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/dark', attributionControl: false, center: [149.1300, -35.2809], zoom: 11 })")
         map.on("load") {
             mapLoaded = true
             mapCanvas = map.getCanvas()
@@ -331,7 +331,7 @@ private fun updatePopups() {
                 badge.textContent = clusterCount.toString()
                 content.appendChild(badge)
             }
-            val p: dynamic = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, anchor: 'bottom', offset: 10, maxWidth: 'none' })")
+            val p: dynamic = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, anchor: 'bottom', maxWidth: 'none' })")
             p.setLngLat(coords).setDOMContent(content).addTo(map)
             val popupEl = p.getElement()
             popupEl.style.visibility = "hidden"
