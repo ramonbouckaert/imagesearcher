@@ -48,6 +48,7 @@ private val popupCoords = mutableMapOf<String, dynamic>()
 private val popupCounts = mutableMapOf<String, Int>()
 private val visiblePopupPaths = mutableSetOf<String>()
 private var popupUpdateHandle = 0
+private var popupMoveHandle = 0
 private var updatingPopups = false
 private val sourceQueryOpts: dynamic = js("({ sourceLayer: 'photos' })")
 private val countGt1Filter: dynamic = js("['>', 'count', 1]")
@@ -224,10 +225,22 @@ private fun addMapSource(query: String) {
         }
     }
 
-    map.on("idle") {
+    map.on("move") {
+        if (popupMoveHandle == 0) {
+            popupMoveHandle = window.setTimeout({
+                popupMoveHandle = 0
+                updatePopups()
+            }, 300)
+        }
+    }
+    val schedulePopupUpdate: () -> Unit = {
+        window.clearTimeout(popupMoveHandle)
+        popupMoveHandle = 0
         window.clearTimeout(popupUpdateHandle)
         popupUpdateHandle = window.setTimeout({ updatePopups() }, 100)
     }
+    map.on("moveend", schedulePopupUpdate)
+    map.on("idle", schedulePopupUpdate)
 }
 
 private fun updateMapQuery(query: String) {
