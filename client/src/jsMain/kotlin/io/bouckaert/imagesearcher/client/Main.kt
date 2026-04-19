@@ -327,13 +327,14 @@ private fun updatePopups() {
             p.setLngLat(coords).setHTML(html).addTo(map)
             val popupEl = p.getElement()
             popupEl.style.visibility = "hidden"
-            val img = popupEl.querySelector("img")
-            img?.addEventListener("load", {
+            val img: dynamic = popupEl.querySelector("img")
+            img?.decode()?.then({ _: dynamic ->
                 popupEl.style.visibility = "visible"
                 visiblePopupPaths.add(path)
                 applyCircleFilter()
+            }, { _: dynamic ->
+                popupEl.style.visibility = "visible"
             })
-            img?.addEventListener("error", { popupEl.style.visibility = "visible" })
             popups[path] = p
             popupCoords[path] = coords
             popupCounts[path] = clusterCount
