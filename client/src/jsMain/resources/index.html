@@ -134,10 +134,15 @@
 
         #map-view { display: none; }
 
+        .maplibregl-popup {
+            pointer-events: none;
+        }
+
         .maplibregl-popup-content {
             padding: 3px !important;
             border-radius: 6px;
             overflow: hidden;
+            pointer-events: none !important;
         }
 
         #map {

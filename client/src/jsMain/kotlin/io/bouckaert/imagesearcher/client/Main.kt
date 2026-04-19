@@ -51,8 +51,6 @@ private var popupUpdateHandle = 0
 private var updatingPopups = false
 private val sourceQueryOpts: dynamic = js("({ sourceLayer: 'photos' })")
 private val countGt1Filter: dynamic = js("['>', 'count', 1]")
-private val wheelOpts: dynamic = js("({ passive: false })")
-private val touchOpts: dynamic = js("({ passive: true })")
 
 external fun encodeURIComponent(value: String): String
 
@@ -211,6 +209,21 @@ private fun addMapSource(query: String) {
         mapCanvas.style.cursor = ""
     }
 
+    map.on("click") { e: dynamic ->
+        val mapRect = mapCanvas.getBoundingClientRect()
+        val clientX = (mapRect.left as Double) + (e.point.x as Double)
+        val clientY = (mapRect.top as Double) + (e.point.y as Double)
+        for ((path, popup) in popups) {
+            if (path !in visiblePopupPaths) continue
+            val rect = popup.getElement().getBoundingClientRect()
+            if (clientX >= (rect.left as Double) && clientX <= (rect.right as Double) &&
+                clientY >= (rect.top as Double) && clientY <= (rect.bottom as Double)) {
+                window.open(path, "_blank")
+                break
+            }
+        }
+    }
+
     map.on("idle") {
         window.clearTimeout(popupUpdateHandle)
         popupUpdateHandle = window.setTimeout({ updatePopups() }, 100)
@@ -222,10 +235,6 @@ private fun updateMapQuery(query: String) {
     if (source != null) {
         source.setTiles(arrayOf(tileUrl(query)))
     }
-}
-
-private fun forwardEvent(canvas: dynamic, event: dynamic) {
-    js("canvas.dispatchEvent(new event.constructor(event.type, event))")
 }
 
 private fun applyCircleFilter() {
@@ -305,28 +314,6 @@ private fun updatePopups() {
             p.setLngLat(coords).setHTML(html).addTo(map)
             val popupEl = p.getElement()
             popupEl.style.visibility = "hidden"
-            // Navigate on click, but only if the mouse didn't move (i.e. not a drag)
-            popupEl.addEventListener("click", { window.open(path, "_blank") })
-            // Forward scroll events so the map zooms when scrolling over a popup
-            popupEl.addEventListener("wheel", { e: dynamic ->
-                e.preventDefault()
-                forwardEvent(mapCanvas, e)
-            }, wheelOpts)
-            // Forward mousedown so dragging works; preventDefault stops image/text drag without killing click
-            popupEl.addEventListener("mousedown", { e: dynamic ->
-                e.preventDefault()
-                forwardEvent(mapCanvas, e)
-            })
-            // Forward touch events without preventDefault so taps still generate a click for navigation
-            popupEl.addEventListener("touchstart", { e: dynamic ->
-                forwardEvent(mapCanvas, e)
-            }, touchOpts)
-            popupEl.addEventListener("touchmove", { e: dynamic ->
-                forwardEvent(mapCanvas, e)
-            }, touchOpts)
-            popupEl.addEventListener("touchend", { e: dynamic ->
-                forwardEvent(mapCanvas, e)
-            }, touchOpts)
             val img = popupEl.querySelector("img")
             img?.addEventListener("load", {
                 popupEl.style.visibility = "visible"
