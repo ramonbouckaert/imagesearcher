@@ -28,7 +28,7 @@ external class IntersectionObserverEntry {
 private const val PAGE_SIZE = 30
 private const val DEBOUNCE_MS = 350
 private const val POPUP_MIN_ZOOM = 0
-private const val MAX_POPUPS = 30
+private const val MAX_POPUPS = 100
 
 private val scope = MainScope()
 private val json = Json { ignoreUnknownKeys = true }
