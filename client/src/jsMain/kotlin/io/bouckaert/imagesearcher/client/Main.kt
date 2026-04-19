@@ -6,6 +6,8 @@ import kotlinx.browser.window
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.Json
 import org.w3c.dom.Element
 import org.w3c.dom.HTMLAnchorElement
@@ -32,6 +34,7 @@ private const val MAX_POPUPS = 200
 
 private val scope = MainScope()
 private val json = Json { ignoreUnknownKeys = true }
+private val decodeSemaphore = Semaphore(3)
 
 private var currentQuery = ""
 private var currentOffset = 0
@@ -335,14 +338,14 @@ private fun updatePopups() {
             p.setLngLat(coords).setDOMContent(content).addTo(map)
             val popupEl = p.getElement()
             popupEl.style.visibility = "hidden"
-            img.src = path
-            val offscreenImg = document.createElement("img") as HTMLImageElement
-            offscreenImg.src = path
             scope.launch {
-                try {
-                    @Suppress("UNCHECKED_CAST")
-                    (offscreenImg.asDynamic().decode() as kotlin.js.Promise<Unit>).await()
-                } catch (_: Throwable) {}
+                decodeSemaphore.withPermit {
+                    img.src = path
+                    try {
+                        @Suppress("UNCHECKED_CAST")
+                        (img.asDynamic().decode() as kotlin.js.Promise<Unit>).await()
+                    } catch (_: Throwable) {}
+                }
                 popupEl.style.visibility = "visible"
                 visiblePopupPaths.add(path)
                 applyCircleFilter()
