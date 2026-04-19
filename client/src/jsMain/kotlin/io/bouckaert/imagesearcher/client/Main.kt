@@ -28,7 +28,7 @@ external class IntersectionObserverEntry {
 private const val PAGE_SIZE = 30
 private const val DEBOUNCE_MS = 350
 private const val POPUP_MIN_ZOOM = 0
-private const val MAX_POPUPS = 100
+private const val MAX_POPUPS = 200
 
 private val scope = MainScope()
 private val json = Json { ignoreUnknownKeys = true }
@@ -290,7 +290,6 @@ private fun updatePopups() {
                     } else {
                         val badge: dynamic = document.createElement("span")
                         badge.className = "popup-count-badge"
-                        badge.setAttribute("style", "position:absolute;top:4px;right:4px;background:#000;color:#fff;font-size:11px;font-weight:bold;border-radius:10px;padding:1px 6px;pointer-events:none")
                         badge.textContent = clusterCount.toString()
                         popupEl.querySelector(".popup-content")?.appendChild(badge)
                     }
@@ -300,8 +299,8 @@ private fun updatePopups() {
             }
         } else {
             val coords = feature.geometry.coordinates
-            val badge = if (clusterCount > 1) """<span class="popup-count-badge" style="position:absolute;top:4px;right:4px;background:#000;color:#fff;font-size:11px;font-weight:bold;border-radius:10px;padding:1px 6px;pointer-events:none">$clusterCount</span>""" else ""
-            val html = """<div class="popup-content" style="position:relative;display:inline-block"><img src="$path" style="width:150px;height:150px;object-fit:cover;display:block;border-radius:5px;cursor:pointer">$badge</div>"""
+            val badge = if (clusterCount > 1) """<span class="popup-count-badge">$clusterCount</span>""" else ""
+            val html = """<div class="popup-content"><img src="$path">$badge</div>"""
             val p: dynamic = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, anchor: 'bottom', offset: 10, maxWidth: 'none' })")
             p.setLngLat(coords).setHTML(html).addTo(map)
             val popupEl = p.getElement()
@@ -318,8 +317,14 @@ private fun updatePopups() {
                 e.preventDefault()
                 forwardEvent(mapCanvas, e)
             })
-            // Forward touchstart without preventDefault so a tap still generates a click for navigation
+            // Forward touch events without preventDefault so taps still generate a click for navigation
             popupEl.addEventListener("touchstart", { e: dynamic ->
+                forwardEvent(mapCanvas, e)
+            }, touchOpts)
+            popupEl.addEventListener("touchmove", { e: dynamic ->
+                forwardEvent(mapCanvas, e)
+            }, touchOpts)
+            popupEl.addEventListener("touchend", { e: dynamic ->
                 forwardEvent(mapCanvas, e)
             }, touchOpts)
             val img = popupEl.querySelector("img")
@@ -380,10 +385,6 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
         val link = document.createElement("a") as HTMLAnchorElement
         link.href = result.path
         link.className = "grid-item"
-        link.style.opacity = "0"
-        link.style.setProperty("flex-grow", "1")
-        link.style.setProperty("flex-basis", "220px")
-        link.style.setProperty("aspect-ratio", "1")
 
         val img = document.createElement("img") as HTMLImageElement
         img.src = result.path
@@ -397,10 +398,10 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
             link.style.setProperty("flex-grow", ratioStr)
             link.style.setProperty("flex-basis", "${(ratio * 220).toInt()}px")
             link.style.setProperty("aspect-ratio", ratioStr)
-            link.style.removeProperty("opacity")
+            link.style.opacity = "1"
         })
 
-        if (result.description == null) link.style.setProperty("outline", "3px solid rgba(220,50,50,0.7)")
+        if (result.description == null) link.classList.add("grid-item-untagged")
 
         link.appendChild(img)
         fragment.appendChild(link)

@@ -86,6 +86,41 @@
             display: block;
             overflow: hidden;
             transition: opacity 0.15s;
+            opacity: 0;
+            flex-grow: 1;
+            flex-basis: 220px;
+            aspect-ratio: 1;
+        }
+
+        .grid-item-untagged {
+            outline: 3px solid rgba(220,50,50,0.7);
+        }
+
+        .popup-content {
+            position: relative;
+            display: inline-block;
+        }
+
+        .popup-content img {
+            width: 15vmin;
+            height: 15vmin;
+            object-fit: cover;
+            display: block;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .popup-count-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #000;
+            color: #fff;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 10px;
+            padding: 1px 6px;
+            pointer-events: none;
         }
 
         .grid-item:hover { opacity: 0.8; }

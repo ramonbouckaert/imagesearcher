@@ -44,7 +44,7 @@ import kotlin.math.tan
 private const val RECENCY_WINDOW_MS = 10L * 365 * 24 * 60 * 60 * 1000 // 10 years
 private const val RECENCY_MAX_BOOST = 0.2 // newest images score up to 20% higher
 
-private const val CLUSTER_TILE_RADIUS = 500.0
+private const val CLUSTER_TILE_RADIUS = 480.0
 private const val CLUSTER_TILE_RADIUS_SQ = CLUSTER_TILE_RADIUS * CLUSTER_TILE_RADIUS
 
 private data class TilePoint(
