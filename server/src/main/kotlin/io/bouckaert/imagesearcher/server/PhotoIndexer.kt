@@ -35,6 +35,9 @@ class PhotoIndexer(
                 val relativePath = file.relativeTo(base).path
                 logger.debug { "Indexing $relativePath" }
                 val xmp = XmpReader.read(file)
+                if (xmp.tags.isEmpty() || xmp.description.isNullOrBlank()) {
+                    logger.warn { "Image $relativePath has incomplete metadata"  }
+                }
                 index.index(relativePath, xmp.tags, xmp.description, file.lastModified(), xmp.lat, xmp.lon)
             }
         }

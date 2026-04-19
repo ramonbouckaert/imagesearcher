@@ -1,9 +1,8 @@
 package io.bouckaert.imagesearcher.utils
 
 import com.ashampoo.kim.common.convertToPhotoMetadata
-import com.ashampoo.kim.format.ImageParser
+import com.ashampoo.kim.format.bmff.BaseMediaFileFormatImageParser
 import com.ashampoo.kim.input.JvmInputStreamByteReader
-import com.ashampoo.kim.model.ImageFormat
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -16,11 +15,11 @@ object XmpReader {
     private const val RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     private const val XML_NS = "http://www.w3.org/XML/1998/namespace"
     // We need to assume that all images are AVIF until we fix Kim to support AV1 Image Sequences (animated AVIFs)
-    private val imageParser = ImageParser.forFormat(ImageFormat.AVIF)
+    private val imageParser = BaseMediaFileFormatImageParser
 
     fun read(file: File): XmpData {
         return try {
-            val metadata = imageParser?.parseMetadata(JvmInputStreamByteReader(file.inputStream(), file.length()))
+            val metadata = imageParser.parseMetadata(JvmInputStreamByteReader(file.inputStream(), file.length()))
                 ?: return XmpData(emptyList(), null, null, null)
             val gps = metadata.convertToPhotoMetadata().gpsCoordinates
                 ?.takeIf { it.isValid() && !it.isNullIsland() }
