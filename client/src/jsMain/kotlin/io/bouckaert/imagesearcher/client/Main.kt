@@ -334,6 +334,8 @@ private fun updatePopups() {
                 applyCircleFilter()
             }, { _: dynamic ->
                 popupEl.style.visibility = "visible"
+                visiblePopupPaths.add(path)
+                applyCircleFilter()
             })
             popups[path] = p
             popupCoords[path] = coords
