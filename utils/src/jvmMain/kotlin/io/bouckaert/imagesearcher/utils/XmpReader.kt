@@ -20,7 +20,6 @@ object XmpReader {
     fun read(file: File): XmpData {
         return try {
             val metadata = imageParser.parseMetadata(JvmInputStreamByteReader(file.inputStream(), file.length()))
-                ?: return XmpData(emptyList(), null, null, null)
             val gps = metadata.convertToPhotoMetadata().gpsCoordinates
                 ?.takeIf { it.isValid() && !it.isNullIsland() }
             val xmpString = metadata.xmp ?: return XmpData(emptyList(), null, gps?.latitude, gps?.longitude)

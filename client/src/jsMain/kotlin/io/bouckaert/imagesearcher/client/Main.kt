@@ -409,6 +409,7 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
             link.style.setProperty("flex-grow", ratioStr)
             link.style.setProperty("flex-basis", "${(ratio * 220).toInt()}px")
             link.style.setProperty("aspect-ratio", ratioStr)
+            if (ratio < 1.5) link.style.setProperty("max-width", "calc(50% - 0.25rem)")
             link.style.opacity = "1"
         })
 
