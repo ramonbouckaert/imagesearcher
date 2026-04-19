@@ -20,7 +20,7 @@ class PhotoWatcher(
     libraryRoot: Path,
     private val index: LuceneIndex
 ) {
-    private val imageExtensions = setOf("avif", "gif")
+    private val imageExtensions = setOf("avif")
     private val scan = scanRoot.toFile()
     private val base = libraryRoot.toFile()
 

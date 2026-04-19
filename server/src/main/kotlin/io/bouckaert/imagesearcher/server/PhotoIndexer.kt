@@ -20,7 +20,7 @@ class PhotoIndexer(
     private val libraryRoot: Path,
     private val index: LuceneIndex
 ) {
-    private val imageExtensions = setOf("avif", "gif")
+    private val imageExtensions = setOf("avif")
 
     suspend fun indexAll() = withContext(Dispatchers.IO) {
         val scan = scanRoot.toFile()
