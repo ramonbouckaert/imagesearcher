@@ -17,7 +17,6 @@ import org.apache.lucene.document.NumericDocValuesField
 import org.apache.lucene.document.StoredField
 import org.apache.lucene.document.StringField
 import org.apache.lucene.document.TextField
-import org.apache.lucene.index.DirectoryReader
 import org.apache.lucene.index.IndexWriter
 import org.apache.lucene.index.IndexWriterConfig
 import org.apache.lucene.index.Term
@@ -29,6 +28,8 @@ import org.apache.lucene.search.IndexSearcher
 import org.apache.lucene.search.BooleanClause
 import org.apache.lucene.search.BooleanQuery
 import org.apache.lucene.search.MatchAllDocsQuery
+import org.apache.lucene.search.SearcherFactory
+import org.apache.lucene.search.SearcherManager
 import org.apache.lucene.search.Sort
 import org.apache.lucene.search.SortField
 import org.apache.lucene.store.Directory
@@ -43,7 +44,7 @@ import kotlin.math.tan
 private const val RECENCY_WINDOW_MS = 10L * 365 * 24 * 60 * 60 * 1000 // 10 years
 private const val RECENCY_MAX_BOOST = 0.2 // newest images score up to 20% higher
 
-private const val CLUSTER_TILE_RADIUS = 240.0
+private const val CLUSTER_TILE_RADIUS = 300.0
 private const val CLUSTER_TILE_RADIUS_SQ = CLUSTER_TILE_RADIUS * CLUSTER_TILE_RADIUS
 
 private data class TilePoint(
@@ -54,10 +55,15 @@ private data class TilePoint(
 class LuceneIndex(private val directory: Directory, private val basePath: String) : Closeable {
     private val analyzer = StandardAnalyzer()
     private val writer = IndexWriter(directory, IndexWriterConfig(analyzer))
+    private val searcherManager = SearcherManager(writer, SearcherFactory())
+    private val geomFactory = GeometryFactory()
+    private val mvtConverter = UserDataKeyValueMapConverter()
 
     fun getAllIndexedPaths(): Set<String> {
-        val reader = DirectoryReader.open(writer)
-        return reader.use { r ->
+        searcherManager.maybeRefresh()
+        val searcher = searcherManager.acquire()
+        try {
+            val r = searcher.indexReader
             val paths = HashSet<String>(r.numDocs())
             for (leaf in r.leaves()) {
                 val termsEnum = leaf.reader().terms("path")?.iterator() ?: continue
@@ -67,7 +73,9 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
                     term = termsEnum.next()
                 }
             }
-            paths
+            return paths
+        } finally {
+            searcherManager.release(searcher)
         }
     }
 
@@ -99,13 +107,12 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
             .add(QueryParser("tags", analyzer).parse(queryString), BooleanClause.Occur.MUST)
             .add(boxQuery, BooleanClause.Occur.FILTER)
             .build()
-        val reader = DirectoryReader.open(writer)
-        val geomFactory = GeometryFactory()
-        val converter = UserDataKeyValueMapConverter()
         val layerParams = MvtLayerParams.DEFAULT
-        return reader.use { r ->
-            val searcher = IndexSearcher(r)
-            val topDocs = searcher.search(query, Int.MAX_VALUE)
+        searcherManager.maybeRefresh()
+        val searcher = searcherManager.acquire()
+        try {
+            val boostedQuery = FunctionScoreQuery.boostByValue(query, recencyBoostSource())
+            val topDocs = searcher.search(boostedQuery, Int.MAX_VALUE)
             val storedFields = searcher.storedFields()
 
             val candidates = topDocs.scoreDocs.mapNotNull { scoreDoc ->
@@ -119,21 +126,18 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
                 TilePoint(px, py, "$basePath/${doc.get("path")}", scoreDoc.score, lastModifiedMs)
             }
 
-            val sorted = if (queryString.isBlank())
-                candidates.sortedByDescending { it.lastModifiedMs }
-            else
-                candidates.sortedWith(compareByDescending<TilePoint> { it.score }.thenByDescending { it.lastModifiedMs })
+            val sorted = candidates.sortedByDescending { it.score }
 
-            val grid = HashMap<Pair<Int, Int>, MutableList<TilePoint>>()
+            val grid = HashMap<Long, MutableList<TilePoint>>()
             val accepted = mutableListOf<TilePoint>()
-            val counts = HashMap<TilePoint, Int>()
+            val counts = HashMap<TilePoint, Int>(sorted.size)
             for (c in sorted) {
                 val cx = (c.px / CLUSTER_TILE_RADIUS).toInt()
                 val cy = (c.py / CLUSTER_TILE_RADIUS).toInt()
                 var occludedBy: TilePoint? = null
                 outer@ for (dx in -1..1) {
                     for (dy in -1..1) {
-                        for (existing in grid[Pair(cx + dx, cy + dy)] ?: continue) {
+                        for (existing in grid[gridKey(cx + dx, cy + dy)] ?: continue) {
                             val ddx = c.px - existing.px
                             val ddy = c.py - existing.py
                             if (ddx * ddx + ddy * ddy < CLUSTER_TILE_RADIUS_SQ) {
@@ -144,7 +148,7 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
                     }
                 }
                 if (occludedBy == null) {
-                    grid.getOrPut(Pair(cx, cy)) { mutableListOf() }.add(c)
+                    grid.getOrPut(gridKey(cx, cy)) { mutableListOf() }.add(c)
                     accepted.add(c)
                     counts[c] = 1
                 } else {
@@ -159,7 +163,9 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
             }
             val layer = JtsLayer("photos", points)
             val mvt = JtsMvt(layer)
-            MvtEncoder.encode(mvt, layerParams, converter)
+            return MvtEncoder.encode(mvt, layerParams, mvtConverter)
+        } finally {
+            searcherManager.release(searcher)
         }
     }
 
@@ -172,10 +178,10 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
     }
 
     fun search(query: String, limit: Int = 20, offset: Int = 0): SearchResponse {
-        val reader = DirectoryReader.open(writer)
-        return reader.use { r ->
-            val searcher = IndexSearcher(r)
-            if (query.isBlank()) {
+        searcherManager.maybeRefresh()
+        val searcher = searcherManager.acquire()
+        try {
+            return if (query.isBlank()) {
                 val sort = Sort(SortField("lastModified", SortField.Type.LONG, true))
                 val topDocs = searcher.search(MatchAllDocsQuery.INSTANCE, (offset + limit).coerceAtLeast(1), sort)
                 val storedFields = searcher.storedFields()
@@ -183,7 +189,7 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
                     val doc = storedFields.document(scoreDoc.doc)
                     SearchResult(doc.get("path"), doc.get("description"), 0f)
                 }
-                SearchResponse(r.numDocs(), results)
+                SearchResponse(searcher.indexReader.numDocs(), results)
             } else {
                 val baseQuery = QueryParser("tags", analyzer).parse(query)
                 val total = searcher.count(baseQuery)
@@ -196,15 +202,20 @@ class LuceneIndex(private val directory: Directory, private val basePath: String
                 }
                 SearchResponse(total, results)
             }
+        } finally {
+            searcherManager.release(searcher)
         }
     }
 
     override fun close() {
+        searcherManager.close()
         writer.close()
         analyzer.close()
         directory.close()
     }
 }
+
+private fun gridKey(cx: Int, cy: Int): Long = cx.toLong().shl(32) or cy.toLong().and(0xFFFFFFFFL)
 
 private fun recencyBoostSource(): DoubleValuesSource {
     val nowMs = System.currentTimeMillis()

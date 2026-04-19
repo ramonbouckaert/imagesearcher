@@ -42,6 +42,7 @@ private var hasMore = false
 private var currentTab = "list"
 private var listQuery = ""
 private var map: dynamic = null
+private var mapCanvas: dynamic = null
 private var mapLoaded = false
 private val popups = mutableMapOf<String, dynamic>()
 private val popupCoords = mutableMapOf<String, dynamic>()
@@ -148,6 +149,7 @@ private fun initMap(query: String) {
         map = js("new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/dark', attributionControl: true, center: [149.1300, -35.2809], zoom: 11 })")
         map.on("load") {
             mapLoaded = true
+            mapCanvas = map.getCanvas()
             addMapSource(query)
         }
     }
@@ -201,11 +203,11 @@ private fun addMapSource(query: String) {
     }
 
     map.on("mousemove", "photo-points") { _: dynamic ->
-        map.getCanvas().style.cursor = "pointer"
+        mapCanvas.style.cursor = "pointer"
     }
 
     map.on("mouseleave", "photo-points") { _: dynamic ->
-        map.getCanvas().style.cursor = ""
+        mapCanvas.style.cursor = ""
     }
 
     map.on("idle") {
@@ -258,6 +260,7 @@ private fun updatePopups() {
             popups.values.forEach { it.remove() }
             popups.clear()
             popupCoords.clear()
+            popupCounts.clear()
             visiblePopupPaths.clear()
             applyCircleFilter()
         }
@@ -276,7 +279,7 @@ private fun updatePopups() {
         if (seen.size >= MAX_POPUPS) break
         val feature = features[i]
         val path = feature.properties.path as String
-        seen.add(path)
+        if (!seen.add(path)) continue
         val clusterCount = (feature.properties.count as? Number)?.toInt() ?: 1
         if (path in popups) {
             if (clusterCount != popupCounts[path]) {
@@ -301,26 +304,25 @@ private fun updatePopups() {
             val coords = feature.geometry.coordinates
             val badge = if (clusterCount > 1) """<span class="popup-count-badge" style="position:absolute;top:4px;right:4px;background:#000;color:#fff;font-size:11px;font-weight:bold;border-radius:10px;padding:1px 6px;pointer-events:none">$clusterCount</span>""" else ""
             val html = """<div class="popup-content" style="position:relative;display:inline-block"><img src="$path" style="width:150px;height:150px;object-fit:cover;display:block;border-radius:5px;cursor:pointer">$badge</div>"""
-            val p: dynamic = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 10, maxWidth: 'none' })")
+            val p: dynamic = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, anchor: 'bottom', offset: 10, maxWidth: 'none' })")
             p.setLngLat(coords).setHTML(html).addTo(map)
             val popupEl = p.getElement()
             popupEl.style.visibility = "hidden"
-            val canvas = map.getCanvas()
             // Navigate on click, but only if the mouse didn't move (i.e. not a drag)
             popupEl.addEventListener("click", { window.open(path, "_blank") })
             // Forward scroll events so the map zooms when scrolling over a popup
             popupEl.addEventListener("wheel", { e: dynamic ->
                 e.preventDefault()
-                forwardEvent(canvas, e)
+                forwardEvent(mapCanvas, e)
             }, js("{ passive: false }"))
             // Forward mousedown so dragging works; preventDefault stops image/text drag without killing click
             popupEl.addEventListener("mousedown", { e: dynamic ->
                 e.preventDefault()
-                forwardEvent(canvas, e)
+                forwardEvent(mapCanvas, e)
             })
             // Forward touchstart without preventDefault so a tap still generates a click for navigation
             popupEl.addEventListener("touchstart", { e: dynamic ->
-                forwardEvent(canvas, e)
+                forwardEvent(mapCanvas, e)
             }, js("{ passive: true }"))
             val img = popupEl.querySelector("img")
             img?.addEventListener("load", {
@@ -340,6 +342,7 @@ private fun updatePopups() {
         popups[path].remove()
         popups.remove(path)
         popupCoords.remove(path)
+        popupCounts.remove(path)
         visiblePopupPaths.remove(path)
     }
     if (toRemove.isNotEmpty()) applyCircleFilter()
@@ -373,6 +376,7 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
 
     val (total, results) = json.decodeFromString<SearchResponse>(response.text().await())
 
+    val fragment = document.createDocumentFragment()
     results.forEach { result ->
         val link = document.createElement("a") as HTMLAnchorElement
         link.href = result.path
@@ -399,8 +403,9 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
         if (result.description == null) link.style.setProperty("outline", "3px solid rgba(220,50,50,0.7)")
 
         link.appendChild(img)
-        grid.appendChild(link)
+        fragment.appendChild(link)
     }
+    grid.appendChild(fragment)
 
     totalLoaded += results.size
     currentOffset += results.size
