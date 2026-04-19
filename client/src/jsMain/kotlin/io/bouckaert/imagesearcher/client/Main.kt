@@ -35,7 +35,6 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private var currentQuery = ""
 private var currentOffset = 0
-private var totalLoaded = 0
 private var isLoading = false
 private var hasMore = false
 
@@ -50,6 +49,10 @@ private val popupCounts = mutableMapOf<String, Int>()
 private val visiblePopupPaths = mutableSetOf<String>()
 private var popupUpdateHandle = 0
 private var updatingPopups = false
+private val sourceQueryOpts: dynamic = js("({ sourceLayer: 'photos' })")
+private val countGt1Filter: dynamic = js("['>', 'count', 1]")
+private val wheelOpts: dynamic = js("({ passive: false })")
+private val touchOpts: dynamic = js("({ passive: true })")
 
 external fun encodeURIComponent(value: String): String
 
@@ -83,7 +86,6 @@ fun main() {
                 if (currentQuery != listQuery) {
                     listQuery = currentQuery
                     currentOffset = 0
-                    totalLoaded = 0
                     hasMore = false
                     grid.innerHTML = ""
                     scope.launch { loadPage(grid, status, sentinel) }
@@ -114,7 +116,6 @@ fun main() {
                 if (currentTab == "list") {
                     listQuery = currentQuery
                     currentOffset = 0
-                    totalLoaded = 0
                     hasMore = false
                     grid.innerHTML = ""
                     scope.launch { loadPage(grid, status, sentinel) }
@@ -230,21 +231,20 @@ private fun forwardEvent(canvas: dynamic, event: dynamic) {
 private fun applyCircleFilter() {
     if (visiblePopupPaths.isEmpty()) {
         map.setFilter("photo-points", null)
-        map.setFilter("photo-count-labels", js("['>', 'count', 1]"))
+        map.setFilter("photo-count-labels", countGt1Filter)
     } else {
         val circleNotIn: dynamic = js("[]")
         circleNotIn.push("!in")
         circleNotIn.push("path")
-        visiblePopupPaths.forEach { circleNotIn.push(it) }
-        map.setFilter("photo-points", circleNotIn)
-
         val labelNotIn: dynamic = js("[]")
         labelNotIn.push("!in")
         labelNotIn.push("path")
-        visiblePopupPaths.forEach { labelNotIn.push(it) }
+        visiblePopupPaths.forEach { circleNotIn.push(it); labelNotIn.push(it) }
+        map.setFilter("photo-points", circleNotIn)
+
         val labelFilter: dynamic = js("[]")
         labelFilter.push("all")
-        labelFilter.push(js("['>', 'count', 1]"))
+        labelFilter.push(countGt1Filter)
         labelFilter.push(labelNotIn)
         map.setFilter("photo-count-labels", labelFilter)
     }
@@ -268,12 +268,10 @@ private fun updatePopups() {
         return
     }
 
-    val opts: dynamic = js("({})")
-    opts["sourceLayer"] = "photos"
-    val features = map.querySourceFeatures("photos", opts)
+    val features = map.querySourceFeatures("photos", sourceQueryOpts)
     val count = features.length as Int
 
-    val seen = mutableSetOf<String>()
+    val seen = HashSet<String>()
     var added = 0
     for (i in 0 until count) {
         if (seen.size >= MAX_POPUPS) break
@@ -314,7 +312,7 @@ private fun updatePopups() {
             popupEl.addEventListener("wheel", { e: dynamic ->
                 e.preventDefault()
                 forwardEvent(mapCanvas, e)
-            }, js("{ passive: false }"))
+            }, wheelOpts)
             // Forward mousedown so dragging works; preventDefault stops image/text drag without killing click
             popupEl.addEventListener("mousedown", { e: dynamic ->
                 e.preventDefault()
@@ -323,7 +321,7 @@ private fun updatePopups() {
             // Forward touchstart without preventDefault so a tap still generates a click for navigation
             popupEl.addEventListener("touchstart", { e: dynamic ->
                 forwardEvent(mapCanvas, e)
-            }, js("{ passive: true }"))
+            }, touchOpts)
             val img = popupEl.querySelector("img")
             img?.addEventListener("load", {
                 popupEl.style.visibility = "visible"
@@ -333,6 +331,7 @@ private fun updatePopups() {
             img?.addEventListener("error", { popupEl.style.visibility = "visible" })
             popups[path] = p
             popupCoords[path] = coords
+            popupCounts[path] = clusterCount
             added++
         }
     }
@@ -394,9 +393,10 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
         img.setAttribute("decoding", "async")
         img.addEventListener("load", {
             val ratio = (img.naturalWidth.toDouble() / img.naturalHeight).coerceIn(0.5, 2.5)
-            link.style.setProperty("flex-grow", ratio.toString())
+            val ratioStr = ratio.toString()
+            link.style.setProperty("flex-grow", ratioStr)
             link.style.setProperty("flex-basis", "${(ratio * 220).toInt()}px")
-            link.style.setProperty("aspect-ratio", ratio.toString())
+            link.style.setProperty("aspect-ratio", ratioStr)
             link.style.removeProperty("opacity")
         })
 
@@ -407,7 +407,6 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
     }
     grid.appendChild(fragment)
 
-    totalLoaded += results.size
     currentOffset += results.size
     hasMore = currentOffset < total
     isLoading = false
