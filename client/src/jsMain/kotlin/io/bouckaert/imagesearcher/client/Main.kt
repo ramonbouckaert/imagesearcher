@@ -321,22 +321,30 @@ private fun updatePopups() {
             }
         } else {
             val coords = feature.geometry.coordinates
-            val badge = if (clusterCount > 1) """<span class="popup-count-badge">$clusterCount</span>""" else ""
-            val html = """<div class="popup-content"><img src="$path">$badge</div>"""
+            val content = document.createElement("div")
+            content.className = "popup-content"
+            val img = document.createElement("img") as HTMLImageElement
+            content.appendChild(img)
+            if (clusterCount > 1) {
+                val badge = document.createElement("span")
+                badge.className = "popup-count-badge"
+                badge.textContent = clusterCount.toString()
+                content.appendChild(badge)
+            }
             val p: dynamic = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, anchor: 'bottom', offset: 10, maxWidth: 'none' })")
-            p.setLngLat(coords).setHTML(html).addTo(map)
+            p.setLngLat(coords).setDOMContent(content).addTo(map)
             val popupEl = p.getElement()
             popupEl.style.visibility = "hidden"
-            val img: dynamic = popupEl.querySelector("img")
-            img?.decode()?.then({ _: dynamic ->
+            img.src = path
+            scope.launch {
+                try {
+                    @Suppress("UNCHECKED_CAST")
+                    (img.asDynamic().decode() as kotlin.js.Promise<Unit>).await()
+                } catch (_: Throwable) {}
                 popupEl.style.visibility = "visible"
                 visiblePopupPaths.add(path)
                 applyCircleFilter()
-            }, { _: dynamic ->
-                popupEl.style.visibility = "visible"
-                visiblePopupPaths.add(path)
-                applyCircleFilter()
-            })
+            }
             popups[path] = p
             popupCoords[path] = coords
             popupCounts[path] = clusterCount
