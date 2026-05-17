@@ -1,8 +1,8 @@
 package io.bouckaert.imagesearcher.utils
 
-import com.ashampoo.kim.common.convertToPhotoMetadata
-import com.ashampoo.kim.format.bmff.BaseMediaFileFormatImageParser
-import com.ashampoo.kim.input.JvmInputStreamByteReader
+import de.stefan_oltmann.kim.Kim
+import de.stefan_oltmann.kim.common.convertToSummary
+import de.stefan_oltmann.kim.input.JvmInputStreamByteReader
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -14,15 +14,13 @@ object XmpReader {
     private const val DC_NS = "http://purl.org/dc/elements/1.1/"
     private const val RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     private const val XML_NS = "http://www.w3.org/XML/1998/namespace"
-    // We need to assume that all images are AVIF until we fix Kim to support AV1 Image Sequences (animated AVIFs)
-    private val imageParser = BaseMediaFileFormatImageParser
 
     fun read(file: File): XmpData {
         return try {
-            val metadata = imageParser.parseMetadata(JvmInputStreamByteReader(file.inputStream(), file.length()))
-            val gps = metadata.convertToPhotoMetadata().gpsCoordinates
+            val metadata = Kim.readMetadata(JvmInputStreamByteReader(file.inputStream(), file.length()))
+            val gps = metadata?.convertToSummary()?.gpsCoordinates
                 ?.takeIf { it.isValid() && !it.isNullIsland() }
-            val xmpString = metadata.xmp ?: return XmpData(emptyList(), null, gps?.latitude, gps?.longitude)
+            val xmpString = metadata?.xmp ?: return XmpData(emptyList(), null, gps?.latitude, gps?.longitude)
             val doc = xmlFactory.newDocumentBuilder().parse(
                 xmpString.trimStart('\uFEFF').trim().byteInputStream()
             )

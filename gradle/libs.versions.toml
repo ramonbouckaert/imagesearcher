@@ -10,7 +10,7 @@ kotlinxCoroutines = "1.10.2"
 ktor = "3.4.2"
 lucene = "10.4.0"
 kfswatch = "1.4.0"
-kim = "0.26.2"
+kim = "0.31.0"
 logback = "1.5.32"
 kotlinLogging = "8.0.01"
 shadow = "8.3.8"
@@ -29,7 +29,7 @@ luceneCore = { module = "org.apache.lucene:lucene-core", version.ref = "lucene" 
 luceneQueryparser = { module = "org.apache.lucene:lucene-queryparser", version.ref = "lucene" }
 luceneQueries = { module = "org.apache.lucene:lucene-queries", version.ref = "lucene" }
 kfswatch = { module = "io.github.irgaly.kfswatch:kfswatch", version.ref = "kfswatch" }
-kim = { module = "com.ashampoo:kim", version.ref = "kim" }
+kim = { module = "de.stefan-oltmann:kim", version.ref = "kim" }
 logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 kotlinLogging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
 mvt = { module = "io.github.sebasbaumh:mapbox-vector-tile-java", version.ref = "mvt" }
