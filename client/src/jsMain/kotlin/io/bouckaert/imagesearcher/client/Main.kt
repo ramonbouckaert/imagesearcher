@@ -126,8 +126,10 @@ fun main() {
     })
 }
 
-private fun thumbnailUrl(path: String): String =
-    if (path.startsWith("/images/")) "/thumbnails/" + path.removePrefix("/images/") else path
+private fun thumbnailUrl(path: String): String {
+    val stripped = path.trimStart('/')
+    return if (stripped.startsWith("images/")) "/thumbnails/" + stripped.removePrefix("images/") else path
+}
 
 private fun tileUrl(query: String): String {
     val q = encodeURIComponent(query)
