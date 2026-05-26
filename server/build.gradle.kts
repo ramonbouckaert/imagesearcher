@@ -1,3 +1,8 @@
+import java.net.URI
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.util.jar.JarFile
+
 plugins {
     id("buildsrc.convention.kotlin-jvm")
     alias(libs.plugins.kotlinPluginSerialization)
@@ -36,6 +41,46 @@ tasks.withType<Test>().configureEach {
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     mergeServiceFiles()
+    exclude("module-info.class")
+
+    // Shadow 9 bug: when the same META-INF/services file exists in multiple dependency JARs,
+    // mergeServiceFiles() silently uses "last write wins" instead of appending all entries.
+    // For Lucene this breaks SPI codec discovery (e.g. Lucene104PostingsFormat is missing).
+    // Fix: after the JAR is assembled, scan every dependency JAR for service entries and
+    // add back anything that was dropped.
+    val runtimeJarFiles = project.configurations.getByName("runtimeClasspath").filter { f: File -> f.extension == "jar" }
+    doLast {
+        val outputJar = archiveFile.get().asFile
+        val expected = mutableMapOf<String, LinkedHashSet<String>>()
+        runtimeJarFiles.forEach { depJar: File ->
+            JarFile(depJar).use { jf: JarFile ->
+                val jarEntries = jf.entries()
+                while (jarEntries.hasMoreElements()) {
+                    val e = jarEntries.nextElement()
+                    if (!e.isDirectory && e.name.startsWith("META-INF/services/")) {
+                        jf.getInputStream(e).bufferedReader().readLines()
+                            .map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+                            .forEach { line: String -> expected.getOrPut(e.name) { linkedSetOf() }.add(line) }
+                    }
+                }
+            }
+        }
+        FileSystems.newFileSystem(URI("jar:" + outputJar.toURI()), emptyMap<String, String>()).use { fs ->
+            expected.forEach { (path, allEntries) ->
+                val p = fs.getPath(path)
+                if (Files.exists(p)) {
+                    val current = Files.readString(p)
+                    val present = current.lineSequence().map { it.trim() }
+                        .filter { it.isNotEmpty() && !it.startsWith("#") }.toSet()
+                    val missing = allEntries - present
+                    if (missing.isNotEmpty()) {
+                        Files.writeString(p, current.trimEnd() + "\n" + missing.joinToString("\n") + "\n")
+                        logger.lifecycle("Patched $path: added ${missing.joinToString()}")
+                    }
+                }
+            }
+        }
+    }
 }
 
 val clientDist = project(":client").tasks.named("jsBrowserDistribution")
