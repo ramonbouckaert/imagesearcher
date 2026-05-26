@@ -3,17 +3,17 @@
 # https://docs.gradle.org/current/userguide/platforms.html#sub::toml-dependencies-format
 
 [versions]
-kotlin = "2.3.20"
-kotlinxDatetime = "0.7.1"
+kotlin = "2.3.21"
+kotlinxDatetime = "0.8.0"
 kotlinxSerializationJSON = "1.11.0"
-kotlinxCoroutines = "1.10.2"
-ktor = "3.4.2"
+kotlinxCoroutines = "1.11.0"
+ktor = "3.5.0"
 lucene = "10.4.0"
 kfswatch = "1.4.0"
 kim = "0.31.0"
 logback = "1.5.32"
-kotlinLogging = "8.0.01"
-shadow = "8.3.8"
+kotlinLogging = "8.0.03"
+shadow = "9.4.1"
 mvt = "25.1.0"
 
 [libraries]
