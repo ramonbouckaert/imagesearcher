@@ -56,6 +56,7 @@ private val countGt1Filter: dynamic = js("['>', 'count', 1]")
 external fun encodeURIComponent(value: String): String
 
 fun main() {
+    js("if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function(e){console.error(e)})")
     document.addEventListener("DOMContentLoaded", {
         val input = document.getElementById("search-input") as HTMLInputElement
         val grid = document.getElementById("image-grid") as HTMLDivElement
