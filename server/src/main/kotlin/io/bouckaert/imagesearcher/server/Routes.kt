@@ -57,12 +57,7 @@ fun Routing.searchRoutes(index: LuceneIndex, basePath: String, libraryRoot: Path
         if (resolvedPath.notExists() || !resolvedPath.isRegularFile()) {
             return@get call.respond(HttpStatusCode.NotFound)
         }
-        val eTag = "\"${Files.getLastModifiedTime(resolvedPath).toMillis()}\""
-        call.response.header(HttpHeaders.ETag, eTag)
-        call.response.header(HttpHeaders.CacheControl, "max-age=86400")
-        if (call.request.header(HttpHeaders.IfNoneMatch) == eTag) {
-            return@get call.respond(HttpStatusCode.NotModified)
-        }
+        call.response.header(HttpHeaders.CacheControl, "no-cache")
         val contentType = when (resolvedPath.toFile().extension.lowercase()) {
             "jpg", "jpeg" -> ContentType.Image.JPEG
             "png" -> ContentType.Image.PNG
