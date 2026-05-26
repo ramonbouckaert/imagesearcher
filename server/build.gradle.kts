@@ -5,6 +5,10 @@ plugins {
     application
 }
 
+kotlin {
+    jvmToolchain(24)
+}
+
 dependencies {
     implementation(project(":utils"))
     implementation(libs.bundles.ktorServer)
@@ -13,7 +17,21 @@ dependencies {
     implementation(libs.kotlinxCoroutines)
     implementation(libs.kotlinLogging)
     implementation(libs.mvt)
+    implementation(libs.vipsffm)
     runtimeOnly(libs.logback)
+    testImplementation(kotlin("test-junit5"))
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    testImplementation(libs.kotlinxCoroutinesTest)
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    // On Windows, libvips installs as libvips-42.dll; set VIPS_LIB_PATH to its full path.
+    val vipsLibPath = System.getenv("VIPS_LIB_PATH")
+    if (vipsLibPath != null) {
+        systemProperty("vipsffm.libpath.vips.override", vipsLibPath)
+    }
 }
 
 tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
@@ -32,5 +50,8 @@ tasks.named<ProcessResources>("processResources") {
 application {
     // (Note that Kotlin compiles `App.kt` to a class with FQN `io.bouckaert.imagesearcher.server.AppKt`.)
     mainClass = "io.bouckaert.imagesearcher.server.AppKt"
-    applicationDefaultJvmArgs = listOf("--add-modules", "jdk.incubator.vector")
+    applicationDefaultJvmArgs = listOf(
+        "--add-modules", "jdk.incubator.vector",
+        "--enable-native-access=ALL-UNNAMED"
+    )
 }

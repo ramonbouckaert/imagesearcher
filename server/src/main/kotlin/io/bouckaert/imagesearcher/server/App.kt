@@ -19,6 +19,8 @@ fun main() {
     val scanRoot = System.getenv("PHOTO_YEAR")?.let { libraryRoot.resolve(it) } ?: libraryRoot
     val basePath = System.getenv("URL_BASE_PATH") ?: libraryRoot.toString()
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    val thumbnailCacheMaxBytes = (System.getenv("THUMBNAIL_CACHE_MB")?.toLongOrNull() ?: 256L) * 1024 * 1024
+    val thumbnailCache = ThumbnailCache.withVips(thumbnailCacheMaxBytes)
 
     val luceneDirectory = ByteBuffersDirectory()
 
@@ -35,7 +37,7 @@ fun main() {
 
             embeddedServer(CIO, port = port) {
                 install(ContentNegotiation) { json() }
-                routing { searchRoutes(index, basePath) }
+                routing { searchRoutes(index, basePath, libraryRoot, thumbnailCache) }
             }.start(wait = true)
 
             watchJob.cancel()

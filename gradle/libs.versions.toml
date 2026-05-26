@@ -15,6 +15,7 @@ logback = "1.5.32"
 kotlinLogging = "8.0.03"
 shadow = "9.4.1"
 mvt = "25.1.0"
+vipsffm = "1.9.8"
 
 [libraries]
 kotlinGradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
@@ -33,6 +34,8 @@ kim = { module = "de.stefan-oltmann:kim", version.ref = "kim" }
 logback = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 kotlinLogging = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlinLogging" }
 mvt = { module = "io.github.sebasbaumh:mapbox-vector-tile-java", version.ref = "mvt" }
+vipsffm = { module = "app.photofox.vips-ffm:vips-ffm-core", version.ref = "vipsffm" }
+kotlinxCoroutinesTest = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 
 # Libraries can be bundled together for easier import
 [bundles]
