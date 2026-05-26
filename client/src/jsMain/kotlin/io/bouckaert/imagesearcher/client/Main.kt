@@ -126,6 +126,9 @@ fun main() {
     })
 }
 
+private fun thumbnailUrl(path: String): String =
+    if (path.startsWith("/images/")) "/thumbnails/" + path.removePrefix("/images/") else path
+
 private fun tileUrl(query: String): String {
     val q = encodeURIComponent(query)
     return "${window.location.origin}/tiles/{z}/{x}/{y}?q=$q"
@@ -344,7 +347,7 @@ private fun updatePopups() {
                 window.requestAnimationFrame { revealPopup() }
             })
             img.addEventListener("error", { revealPopup() })
-            img.src = path
+            img.src = thumbnailUrl(path)
             popups[path] = p
             popupCoords[path] = coords
             popupCounts[path] = clusterCount
@@ -398,7 +401,7 @@ private suspend fun loadPage(grid: HTMLDivElement, status: HTMLParagraphElement,
         link.className = "grid-item"
 
         val img = document.createElement("img") as HTMLImageElement
-        img.src = result.path
+        img.src = thumbnailUrl(result.path)
         img.alt = result.description ?: result.path.substringAfterLast("/")
         result.description?.let { img.title = it }
         img.setAttribute("loading", "lazy")
