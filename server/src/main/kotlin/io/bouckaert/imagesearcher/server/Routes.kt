@@ -39,7 +39,7 @@ fun Routing.searchRoutes(index: LuceneIndex, basePath: String, libraryRoot: Path
         }
         val eTag = "\"${Files.getLastModifiedTime(resolvedPath).toMillis()}\""
         call.response.header(HttpHeaders.ETag, eTag)
-        call.response.header(HttpHeaders.CacheControl, "max-age=86400")
+        call.response.header(HttpHeaders.CacheControl, "max-age=3600, stale-while-revalidate=86400")
         if (call.request.header(HttpHeaders.IfNoneMatch) == eTag) {
             return@get call.respond(HttpStatusCode.NotModified)
         }
