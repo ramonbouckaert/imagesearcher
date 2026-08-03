@@ -18,6 +18,7 @@ import org.w3c.dom.HTMLDivElement
 import org.w3c.dom.HTMLImageElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.HTMLParagraphElement
+import kotlin.js.Promise
 
 external class IntersectionObserver(
     callback: (entries: Array<IntersectionObserverEntry>, observer: IntersectionObserver) -> Unit,
@@ -33,6 +34,13 @@ private const val PAGE_SIZE = 30
 private const val DEBOUNCE_MS = 350
 private const val POPUP_MIN_ZOOM = 0
 private const val MAX_POPUPS = 200
+
+// Increment to force every client to tear down its existing service worker and install a fresh
+// one on the next page load. Bump it whenever sw.js changes in a way that a client must not keep
+// running the old version of — the browser's own update check is not enough, because a worker
+// keeps controlling already-open tabs and a failed or cached update leaves the old one in charge.
+private const val SW_VERSION = 1
+private const val SW_VERSION_STORAGE_KEY = "sw-version"
 
 private val scope = MainScope()
 private val json = Json { ignoreUnknownKeys = true }
@@ -65,7 +73,7 @@ private val countGt1Filter: dynamic = js("['>', ['get', 'count'], 1]")
 external fun encodeURIComponent(value: String): String
 
 fun main() {
-    js("if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function(e){console.error(e)})")
+    registerServiceWorker()
     document.addEventListener("DOMContentLoaded", {
         val input = document.getElementById("search-input") as HTMLInputElement
         val grid = document.getElementById("image-grid") as HTMLDivElement
@@ -134,6 +142,43 @@ fun main() {
             }, DEBOUNCE_MS)
         })
     })
+}
+
+/**
+ * Registers the service worker, first discarding any existing one when [SW_VERSION] has changed
+ * since this browser last registered.
+ *
+ * The version is also appended to the script URL, so the browser sees a different script and
+ * replaces the registration rather than reusing a cached one.
+ */
+private fun registerServiceWorker() {
+    val container = window.navigator.asDynamic().serviceWorker
+    if (container == null || container == undefined) return
+
+    val current = SW_VERSION.toString()
+    val previous = runCatching { window.localStorage.getItem(SW_VERSION_STORAGE_KEY) }.getOrNull()
+
+    scope.launch {
+        if (previous != current) {
+            // Unregistering is what actually removes the old worker; registering over the top of it
+            // would leave it controlling open tabs. Caches go too, so a bump is a clean slate.
+            runCatching {
+                val registrations = container.getRegistrations().unsafeCast<Promise<Array<dynamic>>>().await()
+                registrations.forEach { it.unregister().unsafeCast<Promise<Boolean>>().await() }
+
+                val caches = window.asDynamic().caches
+                if (caches != null && caches != undefined) {
+                    val names = caches.keys().unsafeCast<Promise<Array<String>>>().await()
+                    names.forEach { caches.delete(it).unsafeCast<Promise<Boolean>>().await() }
+                }
+            }.onFailure { console.error("Could not remove the previous service worker:", it) }
+        }
+
+        runCatching {
+            container.register("/sw.js?v=$current").unsafeCast<Promise<dynamic>>().await()
+            window.localStorage.setItem(SW_VERSION_STORAGE_KEY, current)
+        }.onFailure { console.error("Service worker registration failed:", it) }
+    }
 }
 
 private fun thumbnailUrl(path: String): String {
