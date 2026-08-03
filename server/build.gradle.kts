@@ -84,11 +84,14 @@ tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJ
 }
 
 val clientDist = project(":client").tasks.named("jsBrowserDistribution")
+val clientMapLibreWorker = project(":client").tasks.named("mapLibreWorkerFiles")
 
 tasks.named<ProcessResources>("processResources") {
-    dependsOn(clientDist)
+    dependsOn(clientDist, clientMapLibreWorker)
     into("static") {
         from(clientDist.map { it.outputs.files })
+        // Served alongside the bundle rather than bundled into it — see mapLibreWorkerFiles.
+        from(clientMapLibreWorker.map { it.outputs.files })
     }
 }
 

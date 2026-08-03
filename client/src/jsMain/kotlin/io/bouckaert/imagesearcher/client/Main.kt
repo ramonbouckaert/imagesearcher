@@ -1,5 +1,9 @@
 package io.bouckaert.imagesearcher.client
 
+import io.bouckaert.imagesearcher.client.maplibre.maplibreCss
+import io.bouckaert.imagesearcher.client.maplibre.setWorkerUrl
+import io.bouckaert.imagesearcher.client.maplibre.Map as MapLibreMap
+import io.bouckaert.imagesearcher.client.maplibre.Popup as MapLibrePopup
 import io.bouckaert.imagesearcher.utils.SearchResponse
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -51,7 +55,12 @@ private var popupUpdateHandle = 0
 private var popupMoveHandle = 0
 private var updatingPopups = false
 private val sourceQueryOpts: dynamic = js("({ sourceLayer: 'photos' })")
-private val countGt1Filter: dynamic = js("['>', 'count', 1]")
+
+// Style spec 25 (MapLibre 6) reports legacy filter syntax as a validation error, and mixing legacy
+// with expression syntax previously blanked the map entirely. Everything below is expression syntax:
+// `['>', 'count', 1]` becomes `['>', ['get', 'count'], 1]`, and legacy `['!in', 'path', …]` becomes
+// `['!', ['in', ['get', 'path'], ['literal', […]]]]`.
+private val countGt1Filter: dynamic = js("['>', ['get', 'count'], 1]")
 
 external fun encodeURIComponent(value: String): String
 
@@ -137,27 +146,26 @@ private fun tileUrl(query: String): String {
     return "${window.location.origin}/tiles/{z}/{x}/{y}?q=$q"
 }
 
-private fun loadMapLibre(onReady: () -> Unit) {
-    val head = document.head!!
-    val link = document.createElement("link")
-    link.setAttribute("rel", "stylesheet")
-    link.setAttribute("href", "https://unpkg.com/maplibre-gl/dist/maplibre-gl.css")
-    head.appendChild(link)
-
-    val script = document.createElement("script")
-    script.setAttribute("src", "https://unpkg.com/maplibre-gl/dist/maplibre-gl.js")
-    script.addEventListener("load", { onReady() })
-    head.appendChild(script)
-}
 
 private fun initMap(query: String) {
-    loadMapLibre {
-        map = js("new maplibregl.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/dark', attributionControl: false, center: [149.1300, -35.2809], zoom: 11 })")
-        map.on("load") {
-            mapLoaded = true
-            mapCanvas = map.getCanvas()
-            addMapSource(query)
-        }
+    // Touching the stylesheet import keeps webpack from eliminating it; MapLibre renders its
+    // controls and popups unstyled without it.
+    maplibreCss
+
+    // Must be set before the first Map is constructed, or no tiles are ever fetched or parsed.
+    setWorkerUrl("/maplibre-gl-worker.mjs")
+
+    map = MapLibreMap(js("({ container: 'map', style: 'https://tiles.openfreemap.org/styles/dark', attributionControl: false, center: [149.1300, -35.2809], zoom: 11 })"))
+    // MapLibre reports tile, style and WebGL failures through this event rather than by throwing,
+    // so without a handler they are silently swallowed and the map just renders blank.
+    map.on("error") { e: dynamic ->
+        console.error("MapLibre error:", e?.error?.message ?: e?.error ?: e)
+    }
+
+    map.on("load") {
+        mapLoaded = true
+        mapCanvas = map.getCanvas()
+        addMapSource(query)
     }
 }
 
@@ -199,7 +207,7 @@ private fun addMapSource(query: String) {
     labelLayer["type"] = "symbol"
     labelLayer["source"] = "photos"
     labelLayer["source-layer"] = "photos"
-    labelLayer["filter"] = js("['>', 'count', 1]")
+    labelLayer["filter"] = countGt1Filter
     labelLayer["layout"] = labelLayout
     labelLayer["paint"] = labelPaint
     map.addLayer(labelLayer)
@@ -261,21 +269,34 @@ private fun applyCircleFilter() {
         map.setFilter("photo-points", null)
         map.setFilter("photo-count-labels", countGt1Filter)
     } else {
-        val circleNotIn: dynamic = js("[]")
-        circleNotIn.push("!in")
-        circleNotIn.push("path")
-        val labelNotIn: dynamic = js("[]")
-        labelNotIn.push("!in")
-        labelNotIn.push("path")
-        visiblePopupPaths.forEach { circleNotIn.push(it); labelNotIn.push(it) }
-        map.setFilter("photo-points", circleNotIn)
+        map.setFilter("photo-points", pathNotIn(visiblePopupPaths))
 
         val labelFilter: dynamic = js("[]")
         labelFilter.push("all")
         labelFilter.push(countGt1Filter)
-        labelFilter.push(labelNotIn)
+        labelFilter.push(pathNotIn(visiblePopupPaths))
         map.setFilter("photo-count-labels", labelFilter)
     }
+}
+
+/** `['!', ['in', ['get', 'path'], ['literal', [...paths]]]]` — the expression-syntax `!in`. */
+private fun pathNotIn(paths: Collection<String>): dynamic {
+    val values: dynamic = js("[]")
+    paths.forEach { values.push(it) }
+
+    val literal: dynamic = js("[]")
+    literal.push("literal")
+    literal.push(values)
+
+    val inExpr: dynamic = js("[]")
+    inExpr.push("in")
+    inExpr.push(js("['get', 'path']"))
+    inExpr.push(literal)
+
+    val notExpr: dynamic = js("[]")
+    notExpr.push("!")
+    notExpr.push(inExpr)
+    return notExpr
 }
 
 private fun updatePopups() {
@@ -337,7 +358,7 @@ private fun updatePopups() {
                 badge.textContent = clusterCount.toString()
                 content.appendChild(badge)
             }
-            val p: dynamic = js("new maplibregl.Popup({ closeButton: false, closeOnClick: false, anchor: 'bottom', maxWidth: 'none' })")
+            val p: dynamic = MapLibrePopup(js("({ closeButton: false, closeOnClick: false, anchor: 'bottom', maxWidth: 'none' })"))
             p.setLngLat(coords).setDOMContent(content).addTo(map)
             val popupEl = p.getElement()
             popupEl.style.visibility = "hidden"
